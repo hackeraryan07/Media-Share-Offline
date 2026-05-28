@@ -57,10 +57,18 @@ class TvSearchFragment : SearchSupportFragment(), SearchSupportFragment.SearchRe
 
     override fun onViewCreated(view: android.view.View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        view.post {
+        val requestFocusRunnable = Runnable {
             val searchEditText = findSearchEditText(view)
-            searchEditText?.requestFocus()
+            searchEditText?.let { et ->
+                if (!et.hasFocus()) {
+                    et.requestFocus()
+                }
+            }
         }
+        view.post(requestFocusRunnable)
+        view.postDelayed(requestFocusRunnable, 150)
+        view.postDelayed(requestFocusRunnable, 400)
+        view.postDelayed(requestFocusRunnable, 800)
     }
 
     override fun onResume() {

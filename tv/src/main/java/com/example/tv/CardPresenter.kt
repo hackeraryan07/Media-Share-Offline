@@ -96,10 +96,15 @@ class CardPresenter : Presenter() {
             cardView.addView(progressBar)
         }
 
-        if (video.totalDuration > 0 && video.watchedPosition > 0) {
-            progressBar.visibility = android.view.View.VISIBLE
+        val hasProgress = video.totalDuration > 0 && video.watchedPosition > 1000 && video.id != "err"
+        if (hasProgress) {
             val pct = (video.watchedPosition * 100 / video.totalDuration).toInt()
-            progressBar.progress = pct
+            if (pct in 1..98) {
+                progressBar.visibility = android.view.View.VISIBLE
+                progressBar.progress = pct
+            } else {
+                progressBar.visibility = android.view.View.GONE
+            }
         } else {
             progressBar.visibility = android.view.View.GONE
         }

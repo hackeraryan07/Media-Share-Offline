@@ -20,16 +20,18 @@ class SearchActivity : FragmentActivity() {
     }
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
-        if (event.keyCode == android.view.KeyEvent.KEYCODE_BACK && event.action == android.view.KeyEvent.ACTION_UP) {
+        if (event.keyCode == android.view.KeyEvent.KEYCODE_BACK) {
             val searchFragment = supportFragmentManager.findFragmentById(R.id.search_fragment) as? TvSearchFragment
             if (searchFragment != null) {
                 val searchView = searchFragment.view
                 if (searchView != null) {
                     val searchEditText = findSearchEditText(searchView)
                     if (searchEditText != null && searchEditText.hasFocus()) {
-                        searchEditText.clearFocus()
-                        val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
-                        imm.hideSoftInputFromWindow(searchEditText.windowToken, 0)
+                        if (event.action == android.view.KeyEvent.ACTION_UP) {
+                            searchEditText.clearFocus()
+                            val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                            imm.hideSoftInputFromWindow(searchEditText.windowToken, 0)
+                        }
                         return true
                     }
                 }
