@@ -56,33 +56,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.server.LocalVideoServer
 import com.example.server.NsdServerPublisher
+import com.example.server.ServerManager
+import com.example.server.ServerService
+import android.content.Intent
 import com.example.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var localVideoServer: LocalVideoServer
-    private lateinit var nsdPublisher: NsdServerPublisher
-    private var multicastLock: WifiManager.MulticastLock? = null
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Acquire Multicast lock to ensure stable local name service packets
-        try {
-            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            multicastLock = wifiManager.createMulticastLock("video_streamer_lock").apply {
-                setReferenceCounted(true)
-                acquire()
-            }
-            Log.d("MainActivity", "Acquired Wi-Fi Multicast Lock")
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Failed to acquire multicast lock", e)
-        }
-
-        localVideoServer = LocalVideoServer(applicationContext)
-        nsdPublisher = NsdServerPublisher(applicationContext)
+        ServerManager.initialize(applicationContext)
 
         setContent {
             MyApplicationTheme {
@@ -90,28 +76,10 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize()
                 ) { innerPadding ->
                     ServerDashboardScreen(
-                        localVideoServer = localVideoServer,
-                        nsdPublisher = nsdPublisher,
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
             }
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        try {
-            localVideoServer.stop()
-            nsdPublisher.unregisterService()
-            multicastLock?.let {
-                if (it.isHeld) {
-                    it.release()
-                    Log.d("MainActivity", "Released Wi-Fi Multicast Lock")
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Error closing resources in onDestroy", e)
         }
     }
 }
@@ -119,25 +87,28 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ServerDashboardScreen(
-    localVideoServer: LocalVideoServer,
-    nsdPublisher: NsdServerPublisher,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var isServerRunning by remember { mutableStateOf(false) }
-    var serverAddress by remember { mutableStateOf<String?>(null) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var videoList by remember { mutableStateOf(localVideoServer.getVideosList()) }
-    var selectedTab by remember { mutableStateOf(0) } // Mock selected tab
+    var isServerRunning by remember { mutableStateOf(ServerManager.isServerRunning) }
+    var serverAddress by remember { mutableStateOf(ServerManager.serverAddress) }
+    var errorMessage by remember { mutableStateOf(ServerManager.errorMessage) }
+    var videoList by remember { mutableStateOf(ServerManager.localVideoServer?.getVideosList() ?: emptyList()) }
+    var selectedTab by remember { mutableStateOf(0) }
     var selectedFolder by remember { mutableStateOf<String?>(null) }
-    var connectedClients by remember { mutableStateOf(localVideoServer.getConnectedClients()) }
+    var connectedClients by remember { mutableStateOf(ServerManager.localVideoServer?.getConnectedClients() ?: emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
 
-    LaunchedEffect(isServerRunning) {
-        while (isServerRunning) {
-            delay(2000)
-            connectedClients = localVideoServer.getConnectedClients()
-            videoList = localVideoServer.getVideosList()
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            isServerRunning = ServerManager.isServerRunning
+            serverAddress = ServerManager.serverAddress
+            errorMessage = ServerManager.errorMessage
+            if (isServerRunning) {
+                connectedClients = ServerManager.localVideoServer?.getConnectedClients() ?: emptyList()
+            }
+            videoList = ServerManager.localVideoServer?.getVideosList() ?: emptyList()
         }
     }
 
@@ -151,28 +122,26 @@ fun ServerDashboardScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            scanLocalMedia(context, localVideoServer)
-            videoList = localVideoServer.getVideosList()
+            ServerManager.localVideoServer?.let { scanLocalMedia(context, it) }
         }
     }
 
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(context, permissionToRequest) == PackageManager.PERMISSION_GRANTED) {
-            scanLocalMedia(context, localVideoServer)
-            videoList = localVideoServer.getVideosList()
+            ServerManager.localVideoServer?.let { scanLocalMedia(context, it) }
         } else {
             permissionLauncher.launch(permissionToRequest)
         }
         
         // Auto-start the server so local caching endpoints are immediately available for the mobile app
-        if (!isServerRunning) {
-            localVideoServer.start { success, address ->
-                isServerRunning = success
-                serverAddress = address
-                if (success) {
-                    val serverIp = address?.substringBefore(":") ?: "127.0.0.1"
-                    nsdPublisher.registerService(8999, serverIp)
-                }
+        if (!ServerManager.isServerRunning) {
+            val intent = Intent(context, ServerService::class.java).apply {
+                action = ServerService.ACTION_START
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
             }
         }
     }
@@ -185,8 +154,7 @@ fun ServerDashboardScreen(
             val name = getFileName(context, uri) ?: "Selected Mobile Stream"
             val size = getFileSize(context, uri)
             val randomId = "local_" + System.currentTimeMillis()
-            localVideoServer.addLocalVideo(randomId, name, uri, size)
-            videoList = localVideoServer.getVideosList()
+            ServerManager.localVideoServer?.addLocalVideo(randomId, name, uri, size)
         }
     }
 
@@ -329,23 +297,13 @@ fun ServerDashboardScreen(
 
                         Button(
                             onClick = {
-                                if (isServerRunning) {
-                                    localVideoServer.stop()
-                                    nsdPublisher.unregisterService()
-                                    isServerRunning = false
-                                    serverAddress = null
+                                val intent = Intent(context, ServerService::class.java).apply {
+                                    action = if (ServerManager.isServerRunning) ServerService.ACTION_STOP else ServerService.ACTION_START
+                                }
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ServerManager.isServerRunning) {
+                                    context.startForegroundService(intent)
                                 } else {
-                                    errorMessage = null
-                                    localVideoServer.start { success, address ->
-                                        isServerRunning = success
-                                        serverAddress = address
-                                        if (success) {
-                                            val serverIp = address?.substringBefore(":") ?: "127.0.0.1"
-                                            nsdPublisher.registerService(8999, serverIp)
-                                        } else {
-                                            if (address != null) errorMessage = address
-                                        }
-                                    }
+                                    context.startService(intent)
                                 }
                             },
                             modifier = Modifier
