@@ -19,7 +19,6 @@ class PlayerActivity : FragmentActivity() {
     private var exoPlayer: ExoPlayer? = null
     private lateinit var metaOverlay: View
     private lateinit var titleText: TextView
-    private lateinit var nextButton: android.widget.Button
     private val hideHandler = Handler(Looper.getMainLooper())
     private var videoUrlString: String? = null
     private val progressHandler = Handler(Looper.getMainLooper())
@@ -56,7 +55,6 @@ class PlayerActivity : FragmentActivity() {
         playerView = findViewById(R.id.video_view)
         metaOverlay = findViewById(R.id.player_meta_overlay)
         titleText = findViewById(R.id.player_video_title)
-        nextButton = findViewById(R.id.btn_next_video)
 
         currentVideo = intent.getSerializableExtra("video") as? TvVideo
         playlist = intent.getSerializableExtra("playlist") as? ArrayList<TvVideo>
@@ -67,49 +65,43 @@ class PlayerActivity : FragmentActivity() {
             return
         }
 
-        nextButton.setOnClickListener {
-            playNextVideo()
-        }
-
-        initializePlayer(currentVideo!!)
+        initializePlayer()
     }
 
-    private fun playNextVideo() {
-        val list = playlist
-        if (list != null && currentIndex + 1 < list.size) {
-            saveFinalProgress()
-            exoPlayer?.stop()
-            exoPlayer?.release()
-            exoPlayer = null
-            
-            currentIndex++
-            currentVideo = list[currentIndex]
-            initializePlayer(currentVideo!!)
-        } else {
-            finish()
-        }
+    private fun getVideoById(id: String): TvVideo? {
+        return playlist?.find { it.id == id } ?: if (currentVideo?.id == id) currentVideo else null
     }
 
-    private fun initializePlayer(video: TvVideo) {
-        titleText.text = video.title
-        videoUrlString = video.url
+    private fun initializePlayer() {
+        videoUrlString = currentVideo?.url
+        titleText.text = currentVideo?.title
+        
         exoPlayer = ExoPlayer.Builder(this).build()
         playerView.player = exoPlayer
         
-        val list = playlist
-        if (list != null && currentIndex + 1 < list.size) {
-            nextButton.visibility = View.VISIBLE
+        val items = mutableListOf<MediaItem>()
+        if (playlist != null && playlist!!.isNotEmpty()) {
+            playlist!!.forEach { video ->
+                items.add(MediaItem.Builder()
+                    .setUri(Uri.parse(video.url))
+                    .setMediaId(video.id)
+                    .build())
+            }
+            exoPlayer?.setMediaItems(items, currentIndex, 0L)
         } else {
-            nextButton.visibility = View.GONE
+            currentVideo?.let {
+                exoPlayer?.setMediaItem(MediaItem.Builder()
+                    .setUri(Uri.parse(it.url))
+                    .setMediaId(it.id)
+                    .build())
+            }
         }
         
-        val mediaItem = MediaItem.fromUri(Uri.parse(video.url))
-        exoPlayer?.setMediaItem(mediaItem)
         exoPlayer?.prepare()
         
-        if (video.watchedPosition > 1000) { // Only resume if progress is more than 1 second to avoid tiny glitches
+        if (currentVideo!!.watchedPosition > 1000) { // Only resume if progress is more than 1 second to avoid tiny glitches
             exoPlayer?.playWhenReady = false
-            showResumeDialog(video)
+            showResumeDialog(currentVideo!!)
         } else {
             exoPlayer?.playWhenReady = true
         }
@@ -117,11 +109,27 @@ class PlayerActivity : FragmentActivity() {
         scheduleMetadataHide()
 
         exoPlayer?.addListener(object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                super.onMediaItemTransition(mediaItem, reason)
+                mediaItem?.mediaId?.let { id ->
+                    getVideoById(id)?.let { video ->
+                        currentVideo = video
+                        titleText.text = video.title
+                        videoUrlString = video.url
+                        showMetadataTemp()
+                    }
+                }
+            }
+            
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) {
                     // Reset progress when fully played to the end
-                    sendProgressUpdate(video.id, 0L, 0L)
-                    playNextVideo()
+                    currentVideo?.let { video ->
+                        sendProgressUpdate(video.id, 0L, 0L)
+                    }
+                    if (exoPlayer?.hasNextMediaItem() == false) {
+                        finish()
+                    }
                 }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
