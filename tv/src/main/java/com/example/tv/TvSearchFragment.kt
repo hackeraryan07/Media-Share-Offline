@@ -38,11 +38,30 @@ class TvSearchFragment : SearchSupportFragment(), SearchSupportFragment.SearchRe
 
         serverIp = activity?.intent?.getStringExtra("server_ip") ?: "127.0.0.1"
 
-        setOnItemViewClickedListener { _, item, _, _ ->
+        setOnItemViewClickedListener { _, item, _, row ->
             if (item is TvVideo) {
                 if (item.id != "err" && item.url.isNotEmpty()) {
                     val intent = Intent(requireContext(), PlayerActivity::class.java).apply {
                         putExtra("video", item)
+                        
+                        if (row is androidx.leanback.widget.ListRow) {
+                            val adapter = row.adapter
+                            if (adapter is androidx.leanback.widget.ArrayObjectAdapter) {
+                                val playlist = ArrayList<TvVideo>()
+                                var currentIndex = 0
+                                for (i in 0 until adapter.size()) {
+                                    val rowItem = adapter.get(i) as? TvVideo
+                                    if (rowItem != null) {
+                                        playlist.add(rowItem)
+                                        if (rowItem.id == item.id) {
+                                            currentIndex = i
+                                        }
+                                    }
+                                }
+                                putExtra("playlist", playlist)
+                                putExtra("currentIndex", currentIndex)
+                            }
+                        }
                     }
                     startActivity(intent)
                 }

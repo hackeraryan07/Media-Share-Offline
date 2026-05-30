@@ -19,9 +19,14 @@ class PlayerActivity : FragmentActivity() {
     private var exoPlayer: ExoPlayer? = null
     private lateinit var metaOverlay: View
     private lateinit var titleText: TextView
+    private lateinit var nextButton: android.widget.Button
     private val hideHandler = Handler(Looper.getMainLooper())
     private var videoUrlString: String? = null
     private val progressHandler = Handler(Looper.getMainLooper())
+    
+    private var playlist: List<TvVideo>? = null
+    private var currentIndex: Int = 0
+    private var currentVideo: TvVideo? = null
 
     private val progressRunnable = object : Runnable {
         override fun run() {
@@ -30,8 +35,7 @@ class PlayerActivity : FragmentActivity() {
                     val currentPos = player.currentPosition
                     val duration = player.duration
                     if (duration > 0 && currentPos >= 0) {
-                        val video = intent.getSerializableExtra("video") as? TvVideo
-                        if (video != null) {
+                        currentVideo?.let { video ->
                             sendProgressUpdate(video.id, currentPos, duration)
                         }
                     }
@@ -52,22 +56,52 @@ class PlayerActivity : FragmentActivity() {
         playerView = findViewById(R.id.video_view)
         metaOverlay = findViewById(R.id.player_meta_overlay)
         titleText = findViewById(R.id.player_video_title)
+        nextButton = findViewById(R.id.btn_next_video)
 
-        val video = intent.getSerializableExtra("video") as? TvVideo
-        if (video == null) {
+        currentVideo = intent.getSerializableExtra("video") as? TvVideo
+        playlist = intent.getSerializableExtra("playlist") as? ArrayList<TvVideo>
+        currentIndex = intent.getIntExtra("currentIndex", 0)
+
+        if (currentVideo == null) {
             finish()
             return
         }
 
-        titleText.text = video.title
+        nextButton.setOnClickListener {
+            playNextVideo()
+        }
 
-        initializePlayer(video)
+        initializePlayer(currentVideo!!)
+    }
+
+    private fun playNextVideo() {
+        val list = playlist
+        if (list != null && currentIndex + 1 < list.size) {
+            saveFinalProgress()
+            exoPlayer?.stop()
+            exoPlayer?.release()
+            exoPlayer = null
+            
+            currentIndex++
+            currentVideo = list[currentIndex]
+            initializePlayer(currentVideo!!)
+        } else {
+            finish()
+        }
     }
 
     private fun initializePlayer(video: TvVideo) {
+        titleText.text = video.title
         videoUrlString = video.url
         exoPlayer = ExoPlayer.Builder(this).build()
         playerView.player = exoPlayer
+        
+        val list = playlist
+        if (list != null && currentIndex + 1 < list.size) {
+            nextButton.visibility = View.VISIBLE
+        } else {
+            nextButton.visibility = View.GONE
+        }
         
         val mediaItem = MediaItem.fromUri(Uri.parse(video.url))
         exoPlayer?.setMediaItem(mediaItem)
@@ -87,7 +121,7 @@ class PlayerActivity : FragmentActivity() {
                 if (playbackState == Player.STATE_ENDED) {
                     // Reset progress when fully played to the end
                     sendProgressUpdate(video.id, 0L, 0L)
-                    finish()
+                    playNextVideo()
                 }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -97,6 +131,7 @@ class PlayerActivity : FragmentActivity() {
             }
         })
 
+        progressHandler.removeCallbacks(progressRunnable)
         progressHandler.postDelayed(progressRunnable, 3000)
     }
 
@@ -159,9 +194,8 @@ class PlayerActivity : FragmentActivity() {
         exoPlayer?.let { player ->
             val currentPos = player.currentPosition
             val duration = player.duration
-            if (duration > 0 && currentPos >= 0) {
-                val video = intent.getSerializableExtra("video") as? TvVideo
-                if (video != null) {
+            if (duration > 0 && currentPos >= 0 && currentPos < duration) {
+                currentVideo?.let { video ->
                     sendProgressUpdate(video.id, currentPos, duration)
                 }
             }
@@ -200,9 +234,10 @@ class PlayerActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
-        val video = intent.getSerializableExtra("video") as? TvVideo
-        if (video == null || video.watchedPosition <= 1000 || (exoPlayer?.currentPosition ?: 0L) > 0L) {
-            exoPlayer?.play()
+        currentVideo?.let { video ->
+            if (video.watchedPosition <= 1000 || (exoPlayer?.currentPosition ?: 0L) > 0L) {
+                exoPlayer?.play()
+            }
         }
     }
 }
