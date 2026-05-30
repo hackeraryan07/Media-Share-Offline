@@ -133,31 +133,65 @@ class TvBrowseFragment : BrowseSupportFragment() {
         rowsAdapter.add(ListRow(header, listRowAdapter))
     }
 
+    private val videoDiffCallback = object : androidx.leanback.widget.DiffCallback<TvVideo>() {
+        override fun areItemsTheSame(oldItem: TvVideo, newItem: TvVideo): Boolean {
+            return oldItem.id == newItem.id
+        }
+        override fun areContentsTheSame(oldItem: TvVideo, newItem: TvVideo): Boolean {
+            return oldItem == newItem
+        }
+    }
+
     private fun buildRows(videos: List<TvVideo>) {
-        rowsAdapter.clear()
-
         val localVideos = videos.filter { it.isLocal }
-
         val cardPresenter = CardPresenter()
 
+        val groupedByFolder = localVideos.groupBy { it.folder ?: "Videos" }
+        val expectedHeaders = mutableListOf<String>()
         if (localVideos.isNotEmpty()) {
-            val allHeader = HeaderItem(1, "All Videos")
-            val allRowAdapter = ArrayObjectAdapter(cardPresenter)
-            for (video in localVideos) {
-                allRowAdapter.add(video)
-            }
-            rowsAdapter.add(ListRow(allHeader, allRowAdapter))
+            expectedHeaders.add("All Videos")
+            expectedHeaders.addAll(groupedByFolder.keys)
+        }
 
-            // Add other rows based on folder
-            val groupedByFolder = localVideos.groupBy { it.folder ?: "Videos" }
-            var headerId = 2L
-            for ((folderName, folderVideos) in groupedByFolder) {
-                val header = HeaderItem(headerId++, folderName)
-                val rowAdapter = ArrayObjectAdapter(cardPresenter)
-                for (video in folderVideos) {
-                    rowAdapter.add(video)
+        var rebuild = rowsAdapter.size() == 0 || rowsAdapter.size() != expectedHeaders.size
+        if (!rebuild) {
+             for (i in 0 until rowsAdapter.size()) {
+                 val row = rowsAdapter.get(i) as? ListRow
+                 if (row == null || row.headerItem.name != expectedHeaders[i]) {
+                     rebuild = true
+                     break
+                 }
+             }
+        }
+
+        if (rebuild) {
+            rowsAdapter.clear()
+            if (localVideos.isNotEmpty()) {
+                val allHeader = HeaderItem(1, "All Videos")
+                val allRowAdapter = ArrayObjectAdapter(cardPresenter)
+                allRowAdapter.addAll(0, localVideos)
+                rowsAdapter.add(ListRow(allHeader, allRowAdapter))
+
+                var headerId = 2L
+                for ((folderName, folderVideos) in groupedByFolder) {
+                    val header = HeaderItem(headerId++, folderName)
+                    val rowAdapter = ArrayObjectAdapter(cardPresenter)
+                    rowAdapter.addAll(0, folderVideos)
+                    rowsAdapter.add(ListRow(header, rowAdapter))
                 }
-                rowsAdapter.add(ListRow(header, rowAdapter))
+            }
+        } else {
+            if (localVideos.isNotEmpty()) {
+                var rowIndex = 0
+                val allRow = rowsAdapter.get(rowIndex++) as ListRow
+                val allRowAdapter = allRow.adapter as ArrayObjectAdapter
+                allRowAdapter.setItems(localVideos, videoDiffCallback)
+
+                for ((folderName, folderVideos) in groupedByFolder) {
+                    val folderRow = rowsAdapter.get(rowIndex++) as ListRow
+                    val folderRowAdapter = folderRow.adapter as ArrayObjectAdapter
+                    folderRowAdapter.setItems(folderVideos, videoDiffCallback)
+                }
             }
         }
     }

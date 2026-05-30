@@ -132,18 +132,6 @@ fun ServerDashboardScreen(
         } else {
             permissionLauncher.launch(permissionToRequest)
         }
-        
-        // Auto-start the server so local caching endpoints are immediately available for the mobile app
-        if (!ServerManager.isServerRunning) {
-            val intent = Intent(context, ServerService::class.java).apply {
-                action = ServerService.ACTION_START
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
-        }
     }
 
     // Visual media picker contract (completely permission-free for media retrieval!)
