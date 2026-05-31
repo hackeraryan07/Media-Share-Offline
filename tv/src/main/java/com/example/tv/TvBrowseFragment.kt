@@ -105,6 +105,9 @@ class TvBrowseFragment : BrowseSupportFragment() {
                                 )
                             )
                         }
+                        
+                        TvDataStore.playlist.clear()
+                        TvDataStore.playlist.addAll(videosList)
 
                         activity?.runOnUiThread {
                             buildRows(videosList)

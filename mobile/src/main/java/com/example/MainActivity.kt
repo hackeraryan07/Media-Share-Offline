@@ -346,7 +346,12 @@ fun ServerDashboardScreen(
                         ) {
                             items(connectedClients) { clIp ->
                                 Card(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        val intent = Intent(context, RemoteActivity::class.java).apply {
+                                            putExtra("tv_ip", clIp)
+                                        }
+                                        context.startActivity(intent)
+                                    },
                                     shape = RoundedCornerShape(16.dp),
                                     colors = CardDefaults.cardColors(containerColor = Color.White),
                                     border = BorderStroke(1.dp, Color(0xFFCAC4D0))

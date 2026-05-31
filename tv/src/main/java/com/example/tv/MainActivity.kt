@@ -108,6 +108,7 @@ class MainActivity : FragmentActivity() {
         }
 
         runOnUiThread {
+            TvRemoteServer.start(applicationContext)
             loader.visibility = View.GONE
             connectionContainer.visibility = View.GONE
             browseFragmentContainer.visibility = View.VISIBLE
@@ -124,6 +125,7 @@ class MainActivity : FragmentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         try {
+            TvRemoteServer.stop()
             discoverer.stopDiscovery()
             multicastLock?.let {
                 if (it.isHeld) {

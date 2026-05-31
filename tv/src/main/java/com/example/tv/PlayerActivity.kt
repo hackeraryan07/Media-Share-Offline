@@ -13,6 +13,8 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 
+import org.json.JSONObject
+
 class PlayerActivity : FragmentActivity() {
 
     private lateinit var playerView: PlayerView
@@ -98,6 +100,47 @@ class PlayerActivity : FragmentActivity() {
         }
         
         exoPlayer?.prepare()
+        
+        TvRemoteServer.playerController = object : TvRemoteServer.PlayerController {
+            override fun play() { Handler(Looper.getMainLooper()).post { exoPlayer?.play() } }
+            override fun pause() { Handler(Looper.getMainLooper()).post { exoPlayer?.pause() } }
+            override fun next() { Handler(Looper.getMainLooper()).post { if (exoPlayer?.hasNextMediaItem() == true) exoPlayer?.seekToNextMediaItem() } }
+            override fun prev() { Handler(Looper.getMainLooper()).post { if (exoPlayer?.hasPreviousMediaItem() == true) exoPlayer?.seekToPreviousMediaItem() } }
+            override fun playVideo(id: String) {
+                Handler(Looper.getMainLooper()).post {
+                    var index = playlist?.indexOfFirst { it.id == id } ?: -1
+                    if (index == -1) {
+                        // Video not in current filtered Leanback playlist. Update playlist to full TvDataStore
+                        playlist = ArrayList(TvDataStore.playlist)
+                        val items = mutableListOf<MediaItem>()
+                        playlist!!.forEach { video ->
+                            items.add(MediaItem.Builder()
+                                .setUri(Uri.parse(video.url))
+                                .setMediaId(video.id)
+                                .build())
+                        }
+                        index = playlist?.indexOfFirst { it.id == id } ?: -1
+                        if (index != -1) {
+                            exoPlayer?.setMediaItems(items, index, 0L)
+                            exoPlayer?.prepare()
+                            exoPlayer?.playWhenReady = true
+                            return@post
+                        }
+                    }
+                    if (index != -1) {
+                        exoPlayer?.seekToDefaultPosition(index)
+                        exoPlayer?.playWhenReady = true
+                    }
+                }
+            }
+            override fun getState(): JSONObject {
+                val state = JSONObject()
+                state.put("isPlaying", exoPlayer?.isPlaying ?: false)
+                state.put("videoId", currentVideo?.id ?: "")
+                state.put("title", currentVideo?.title ?: "")
+                return state
+            }
+        }
         
         if (currentVideo!!.watchedPosition > 1000) { // Only resume if progress is more than 1 second to avoid tiny glitches
             exoPlayer?.playWhenReady = false
@@ -227,6 +270,7 @@ class PlayerActivity : FragmentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        TvRemoteServer.playerController = null
         hideHandler.removeCallbacks(hideRunnable)
         progressHandler.removeCallbacks(progressRunnable)
         saveFinalProgress()
