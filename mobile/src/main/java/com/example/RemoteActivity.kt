@@ -12,7 +12,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
@@ -53,6 +55,9 @@ fun RemoteScreen(tvIp: String, onBack: () -> Unit) {
     var isPlaying by remember { mutableStateOf(false) }
     var currentTitle by remember { mutableStateOf<String?>(null) }
     var currentVideoId by remember { mutableStateOf<String?>(null) }
+    var position by remember { mutableStateOf(0L) }
+    var duration by remember { mutableStateOf(0L) }
+    var isSeeking by remember { mutableStateOf(false) }
     
     val client = remember { OkHttpClient() }
     val videoList = remember { ServerManager.localVideoServer?.getVideosList() ?: emptyList() }
@@ -72,6 +77,10 @@ fun RemoteScreen(tvIp: String, onBack: () -> Unit) {
                                 currentTitle = if (t.isNotBlank()) t else null
                                 val vId = json.optString("videoId", "")
                                 currentVideoId = if (vId.isNotBlank()) vId else null
+                                duration = json.optLong("duration", 0L)
+                                if (!isSeeking) {
+                                    position = json.optLong("position", 0L)
+                                }
                             }
                         }
                     }
@@ -102,7 +111,7 @@ fun RemoteScreen(tvIp: String, onBack: () -> Unit) {
                 title = { Text("TV Remote Controls", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -148,6 +157,28 @@ fun RemoteScreen(tvIp: String, onBack: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(24.dp))
 
+                    // Slider for Seek
+                    Slider(
+                        value = if (duration > 0) (position.toFloat() / duration.toFloat()) else 0f,
+                        onValueChange = { percent ->
+                            isSeeking = true
+                            position = (percent * duration).toLong()
+                        },
+                        onValueChangeFinished = {
+                            isSeeking = false
+                            sendCommand("seek&position=$position")
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color(0xFF6750A4),
+                            activeTrackColor = Color(0xFF6750A4)
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     // Player Controls
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -157,33 +188,51 @@ fun RemoteScreen(tvIp: String, onBack: () -> Unit) {
                         IconButton(
                             onClick = { sendCommand("prev") },
                             modifier = Modifier
-                                .size(56.dp)
+                                .size(48.dp)
                                 .background(Color.White, CircleShape)
                         ) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color(0xFF21005D), modifier = Modifier.size(32.dp))
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color(0xFF21005D))
+                        }
+
+                        IconButton(
+                            onClick = { sendCommand("seek&position=${maxOf(0, position - 5000)}") },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(Color.White, CircleShape)
+                        ) {
+                            Icon(Icons.Default.FastRewind, contentDescription = "Rewind 5s", tint = Color(0xFF21005D))
                         }
 
                         IconButton(
                             onClick = { sendCommand(if (isPlaying) "pause" else "play") },
                             modifier = Modifier
-                                .size(80.dp)
+                                .size(64.dp)
                                 .background(Color(0xFF6750A4), CircleShape)
                         ) {
                             Icon(
                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = if (isPlaying) "Pause" else "Play",
                                 tint = Color.White,
-                                modifier = Modifier.size(48.dp)
+                                modifier = Modifier.size(36.dp)
                             )
+                        }
+
+                        IconButton(
+                            onClick = { sendCommand("seek&position=${minOf(duration, position + 10000)}") },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(Color.White, CircleShape)
+                        ) {
+                            Icon(Icons.Default.FastForward, contentDescription = "Forward 10s", tint = Color(0xFF21005D))
                         }
 
                         IconButton(
                             onClick = { sendCommand("next") },
                             modifier = Modifier
-                                .size(56.dp)
+                                .size(48.dp)
                                 .background(Color.White, CircleShape)
                         ) {
-                            Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color(0xFF21005D), modifier = Modifier.size(32.dp))
+                            Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color(0xFF21005D))
                         }
                     }
                 }

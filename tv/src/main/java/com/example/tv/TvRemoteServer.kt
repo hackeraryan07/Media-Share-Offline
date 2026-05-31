@@ -22,6 +22,7 @@ object TvRemoteServer {
         fun next()
         fun prev()
         fun playVideo(id: String)
+        fun seekTo(positionMs: Long)
         fun getState(): JSONObject
     }
 
@@ -91,6 +92,12 @@ object TvRemoteServer {
                                             context?.startActivity(intent)
                                         }
                                     }
+                                }
+                            }
+                            "seek" -> {
+                                val posStr = params["position"]
+                                if (posStr != null) {
+                                    playerController?.seekTo(posStr.toLongOrNull() ?: 0L)
                                 }
                             }
                         }

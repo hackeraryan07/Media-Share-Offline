@@ -129,8 +129,14 @@ class PlayerActivity : FragmentActivity() {
                     }
                     if (index != -1) {
                         exoPlayer?.seekToDefaultPosition(index)
+                        exoPlayer?.prepare()
                         exoPlayer?.playWhenReady = true
                     }
+                }
+            }
+            override fun seekTo(positionMs: Long) {
+                Handler(Looper.getMainLooper()).post {
+                    exoPlayer?.seekTo(positionMs)
                 }
             }
             override fun getState(): JSONObject {
@@ -139,13 +145,19 @@ class PlayerActivity : FragmentActivity() {
                 state.put("title", currentVideo?.title ?: "")
                 // fetch isPlaying safely
                 var playing = false
+                var position = 0L
+                var duration = 0L
                 val latch = java.util.concurrent.CountDownLatch(1)
                 Handler(Looper.getMainLooper()).post {
                     playing = exoPlayer?.isPlaying ?: false
+                    position = exoPlayer?.currentPosition ?: 0L
+                    duration = exoPlayer?.duration ?: 0L
                     latch.countDown()
                 }
                 try { latch.await(1, java.util.concurrent.TimeUnit.SECONDS) } catch (e: Exception) {}
                 state.put("isPlaying", playing)
+                state.put("position", position)
+                state.put("duration", duration)
                 return state
             }
         }
