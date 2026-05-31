@@ -76,7 +76,7 @@ object TvRemoteServer {
                             "next" -> playerController?.next()
                             "prev" -> playerController?.prev()
                             "play_video" -> {
-                                if (playerController != null && playerController?.getState()?.optString("videoId") != null) {
+                                if (playerController != null) {
                                     id?.let { playerController?.playVideo(it) }
                                 } else {
                                     id?.let {

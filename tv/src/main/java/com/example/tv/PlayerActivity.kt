@@ -135,9 +135,17 @@ class PlayerActivity : FragmentActivity() {
             }
             override fun getState(): JSONObject {
                 val state = JSONObject()
-                state.put("isPlaying", exoPlayer?.isPlaying ?: false)
                 state.put("videoId", currentVideo?.id ?: "")
                 state.put("title", currentVideo?.title ?: "")
+                // fetch isPlaying safely
+                var playing = false
+                val latch = java.util.concurrent.CountDownLatch(1)
+                Handler(Looper.getMainLooper()).post {
+                    playing = exoPlayer?.isPlaying ?: false
+                    latch.countDown()
+                }
+                try { latch.await(1, java.util.concurrent.TimeUnit.SECONDS) } catch (e: Exception) {}
+                state.put("isPlaying", playing)
                 return state
             }
         }
