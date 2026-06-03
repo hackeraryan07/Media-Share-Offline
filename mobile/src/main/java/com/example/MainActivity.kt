@@ -488,7 +488,7 @@ fun ServerDashboardScreen(
                             ) {
                                 items(searchResults) { video ->
                                     Card(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxWidth().clickable { showDevicePopupForVideo = video },
                                         shape = RoundedCornerShape(16.dp),
                                         colors = CardDefaults.cardColors(containerColor = Color.White),
                                         border = BorderStroke(1.dp, Color(0xFFCAC4D0))
