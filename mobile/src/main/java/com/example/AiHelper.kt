@@ -18,6 +18,8 @@ object AiHelper {
         .connectTimeout(60, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .protocols(listOf(okhttp3.Protocol.HTTP_1_1)) // Fallback to HTTP/1.1 for better compatibility on older devices
         .build()
 
     suspend fun generatePlaylist(context: Context, prompt: String): List<String> = withContext(Dispatchers.IO) {
@@ -82,10 +84,14 @@ object AiHelper {
         val response = client.newCall(request).execute()
         if (!response.isSuccessful) {
             val errorBody = response.body?.string() ?: ""
+            Log.e("AiHelper", "API Error body: $errorBody")
             if (response.code == 403) {
                 throw Exception("Error 403: Forbidden. Your API Key is likely invalid, restricted, or not enabled for this service.")
             }
-            throw Exception("API Error: ${response.code} ${response.message}")
+            if (response.code == 503) {
+                throw Exception("Error 503: Service Unavailable. The server might be overloaded or experiencing regional issues.")
+            }
+            throw Exception("API Error: ${response.code} ${response.message}\n$errorBody")
         }
         
         val responseBodyString = response.body?.string() ?: throw Exception("Empty response from API")
