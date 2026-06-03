@@ -22,7 +22,8 @@
         android:elevation="10dp">
         
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
+            android:layout_weight="1"
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
@@ -44,6 +45,15 @@
                 android:textSize="14sp"
                 android:layout_marginTop="4dp"/>
         </LinearLayout>
+        
+        <Button
+            android:id="@+id/btn_add_queue"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Add to Up Next"
+            android:layout_gravity="center_vertical"
+            android:backgroundTint="#6750A4"
+            android:textColor="#FFFFFF" />
     </LinearLayout>
 
 </FrameLayout>

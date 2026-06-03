@@ -112,6 +112,7 @@ class TvBrowseFragment : BrowseSupportFragment() {
 
                         activity?.runOnUiThread {
                             buildRows(videosList)
+                            fetchPlaylists()
                         }
                     } catch (e: Exception) {
                         activity?.runOnUiThread {
@@ -125,6 +126,70 @@ class TvBrowseFragment : BrowseSupportFragment() {
                 }
             }
         })
+    }
+    
+    private fun fetchPlaylists() {
+        val formattedIp = if (serverIp.contains(":") && !serverIp.startsWith("[")) "[$serverIp]" else serverIp
+        val url = "http://$formattedIp:8999/playlists"
+        val request = Request.Builder().url(url).build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {}
+
+            override fun onResponse(call: Call, response: Response) {
+                val body = response.body?.string()
+                if (response.isSuccessful && body != null) {
+                    try {
+                        val jsonArray = JSONArray(body)
+                        val playlistRows = mutableListOf<ListRow>()
+                        val cardPresenter = CardPresenter()
+                        var headerId = 100L
+
+                        for (i in 0 until jsonArray.length()) {
+                            val pObj = jsonArray.getJSONObject(i)
+                            val pName = pObj.getString("name")
+                            val itemsArray = pObj.getJSONArray("items")
+                            val videosInPlaylist = mutableListOf<TvVideo>()
+
+                            for (j in 0 until itemsArray.length()) {
+                                val itemObj = itemsArray.getJSONObject(j)
+                                val vId = itemObj.getString("videoId")
+                                TvDataStore.playlist.find { it.id == vId }?.let {
+                                    videosInPlaylist.add(it)
+                                }
+                            }
+
+                            if (videosInPlaylist.isNotEmpty()) {
+                                val header = HeaderItem(headerId++, "Playlist: $pName")
+                                val rowAdapter = ArrayObjectAdapter(cardPresenter)
+                                rowAdapter.addAll(0, videosInPlaylist)
+                                playlistRows.add(ListRow(header, rowAdapter))
+                            }
+                        }
+
+                        activity?.runOnUiThread {
+                            appendPlaylistRows(playlistRows)
+                        }
+                    } catch (e: Exception) {}
+                }
+            }
+        })
+    }
+
+    private fun appendPlaylistRows(playlistRows: List<ListRow>) {
+        if (rowsAdapter.size() == 0) return
+        
+        // Remove existing playlist rows
+        for (i in rowsAdapter.size() - 1 downTo 0) {
+            val row = rowsAdapter.get(i) as? ListRow
+            if (row != null && row.headerItem?.name?.startsWith("Playlist:") == true) {
+                rowsAdapter.removeItems(i, 1)
+            }
+        }
+        
+        for (row in playlistRows) {
+            rowsAdapter.add(row)
+        }
     }
 
     private fun showErrorRow(msg: String) {

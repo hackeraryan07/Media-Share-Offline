@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.*
@@ -190,7 +191,9 @@ fun ServerDashboardScreen(
                     )
                 }
 
-                IconButton(onClick = {}) {
+                IconButton(onClick = {
+                    context.startActivity(android.content.Intent(context, SettingsActivity::class.java))
+                }) {
                     Icon(
                         imageVector = Icons.Default.Settings,
                         contentDescription = "Settings icon",
@@ -726,6 +729,186 @@ fun ServerDashboardScreen(
                             }
                         }
                     }
+                } else if (selectedTab == 2) {
+                    val db = remember { com.example.db.AppDatabase.getDatabase(context) }
+                    val playlists by remember { db.playlistDao().getAllPlaylistsWithItemsFlow() }.collectAsState(initial = emptyList())
+                    var newPlaylistName by remember { mutableStateOf("") }
+                    
+                    var showAiDialog by remember { mutableStateOf(false) }
+                    
+                    Text(
+                        text = "Playlists & Queues",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1C1B1F),
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    
+                    Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = newPlaylistName,
+                            onValueChange = { newPlaylistName = it },
+                            placeholder = { Text("New Playlist Name") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF6750A4),
+                                unfocusedBorderColor = Color(0xFFCAC4D0),
+                                focusedContainerColor = Color.White,
+                                unfocusedContainerColor = Color.White
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                if (newPlaylistName.isNotBlank()) {
+                                    val name = newPlaylistName
+                                    newPlaylistName = ""
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        db.playlistDao().insertPlaylistSync(com.example.db.Playlist(name = name))
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4)),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text("Create")
+                        }
+                    }
+                    
+                    Button(
+                        onClick = { showAiDialog = true },
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF21005D)),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Icon(Icons.Default.Star, contentDescription = "AI", modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Generate Playlist with AI")
+                    }
+                    
+                    if (showAiDialog) {
+                        var aiPrompt by remember { mutableStateOf("") }
+                        var aiLoading by remember { mutableStateOf(false) }
+                        var aiError by remember { mutableStateOf<String?>(null) }
+                        val coroutineScope = rememberCoroutineScope()
+                        
+                        AlertDialog(
+                            onDismissRequest = { if (!aiLoading) showAiDialog = false },
+                            title = { Text("Generate Playlist with AI", fontWeight = FontWeight.Bold) },
+                            text = {
+                                Column {
+                                    Text("Describe what you want (e.g. 'all taarak mehta episodes in ascending order').")
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    OutlinedTextField(
+                                        value = aiPrompt,
+                                        onValueChange = { aiPrompt = it },
+                                        placeholder = { Text("Your prompt...") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        enabled = !aiLoading
+                                    )
+                                    if (aiError != null) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(aiError!!, color = Color.Red, fontSize = 12.sp)
+                                    }
+                                    if (aiLoading) {
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        if (aiPrompt.isNotBlank()) {
+                                            aiLoading = true
+                                            aiError = null
+                                            coroutineScope.launch {
+                                                try {
+                                                    val ids = AiHelper.generatePlaylist(context, aiPrompt)
+                                                    if (ids.isEmpty()) {
+                                                        aiError = "No matching videos found."
+                                                        aiLoading = false
+                                                    } else {
+                                                        // Generate a default name based on prompt (truncate if too long)
+                                                        val pName = if (aiPrompt.length > 20) aiPrompt.take(20) + "..." else aiPrompt
+                                                        val db = com.example.db.AppDatabase.getDatabase(context)
+                                                        val newId = db.playlistDao().insertPlaylistSync(com.example.db.Playlist(name = "AI: $pName")).toInt()
+                                                        
+                                                        // Insert items
+                                                        ids.forEachIndexed { index, vId ->
+                                                            db.playlistDao().insertPlaylistItemSync(
+                                                                com.example.db.PlaylistItem(
+                                                                    playlistId = newId,
+                                                                    videoId = vId,
+                                                                    displayOrder = index
+                                                                )
+                                                            )
+                                                        }
+                                                        
+                                                        showAiDialog = false
+                                                    }
+                                                } catch (e: Exception) {
+                                                    aiError = e.message ?: "An error occurred."
+                                                    aiLoading = false
+                                                }
+                                            }
+                                        }
+                                    },
+                                    enabled = !aiLoading
+                                ) {
+                                    Text("Generate & Save")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(
+                                    onClick = { showAiDialog = false },
+                                    enabled = !aiLoading
+                                ) {
+                                    Text("Cancel")
+                                }
+                            }
+                        )
+                    }
+                    
+                    if (playlists.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            Text("No playlists yet.", color = Color(0xFF49454F))
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(playlists) { playlistInfo ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    border = BorderStroke(1.dp, Color(0xFFCAC4D0))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(playlistInfo.playlist.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF1C1B1F))
+                                            Text("${playlistInfo.items.size} videos", fontSize = 12.sp, color = Color(0xFF49454F))
+                                        }
+                                        IconButton(onClick = {
+                                            CoroutineScope(Dispatchers.IO).launch {
+                                                db.playlistDao().deletePlaylistSync(playlistInfo.playlist.id)
+                                            }
+                                        }) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -848,15 +1031,15 @@ fun ServerDashboardScreen(
                             .padding(horizontal = 20.dp, vertical = 4.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "Analytics tab",
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "Playlists tab",
                             tint = if (selectedTab == 2) Color(0xFF21005D) else Color(0xFF49454F),
                             modifier = Modifier.size(22.dp)
                         )
                     }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "Analytics",
+                        text = "Playlists",
                         fontSize = 11.sp,
                         fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Medium,
                         color = if (selectedTab == 2) Color(0xFF21005D) else Color(0xFF49454F)
@@ -868,38 +1051,81 @@ fun ServerDashboardScreen(
 
     if (showDevicePopupForVideo != null) {
         val video = showDevicePopupForVideo!!
+        val db = remember { com.example.db.AppDatabase.getDatabase(context) }
+        val playlists by remember { db.playlistDao().getAllPlaylistsFlow() }.collectAsState(initial = emptyList())
+        
         AlertDialog(
             onDismissRequest = { showDevicePopupForVideo = null },
-            title = { Text(text = "Play on Device", fontWeight = FontWeight.Bold) },
+            title = { Text(text = "Play or Queue", fontWeight = FontWeight.Bold) },
             text = {
-                if (connectedClients.isEmpty()) {
-                    Text("No connected devices found.", color = Color(0xFF49454F))
-                } else {
-                    LazyColumn {
-                        items(connectedClients) { client ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth().clickable {
-                                    CoroutineScope(Dispatchers.IO).launch {
-                                        try {
-                                            val url = "http://${client.ip}:9000/command?action=play_video&id=${video.id}"
-                                            val request = Request.Builder().url(url).build()
-                                            OkHttpClient().newCall(request).execute().close()
-                                        } catch (e: Exception) {
-                                            Log.e("Popup", "Command failed: play_video", e)
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text("Play on TV", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+                    if (connectedClients.isEmpty()) {
+                        Text("No connected devices found.", color = Color(0xFF49454F))
+                    } else {
+                        LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                            items(connectedClients) { client ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        CoroutineScope(Dispatchers.IO).launch {
+                                            try {
+                                                val url = "http://${client.ip}:9000/command?action=play_video&id=${video.id}"
+                                                val request = Request.Builder().url(url).build()
+                                                OkHttpClient().newCall(request).execute().close()
+                                            } catch (e: Exception) {
+                                                Log.e("Popup", "Command failed: play_video", e)
+                                            }
                                         }
-                                    }
-                                    showDevicePopupForVideo = null
-                                }.padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
-                                border = BorderStroke(1.dp, Color(0xFFCAC4D0))
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        showDevicePopupForVideo = null
+                                    }.padding(vertical = 4.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    border = BorderStroke(1.dp, Color(0xFFCAC4D0))
                                 ) {
-                                    Icon(Icons.Default.Tv, contentDescription = "TV", tint = Color(0xFF6750A4))
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(text = client.name, fontWeight = FontWeight.Medium)
+                                    Row(
+                                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.Tv, contentDescription = "TV", tint = Color(0xFF6750A4))
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(text = client.name, fontWeight = FontWeight.Medium)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Add to Playlist", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+                    if (playlists.isEmpty()) {
+                        Text("No playlists available.", color = Color(0xFF49454F))
+                    } else {
+                        LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                            items(playlists) { playlist ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        CoroutineScope(Dispatchers.IO).launch {
+                                            val maxOrder = db.playlistDao().getMaxDisplayOrderSync(playlist.id)
+                                            db.playlistDao().insertPlaylistItemSync(
+                                                com.example.db.PlaylistItem(
+                                                    playlistId = playlist.id,
+                                                    videoId = video.id,
+                                                    displayOrder = maxOrder + 1
+                                                )
+                                            )
+                                        }
+                                        showDevicePopupForVideo = null
+                                    }.padding(vertical = 4.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    border = BorderStroke(1.dp, Color(0xFFCAC4D0))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.Menu, contentDescription = "Playlist", tint = Color(0xFF6750A4))
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(text = playlist.name, fontWeight = FontWeight.Medium)
+                                    }
                                 }
                             }
                         }

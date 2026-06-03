@@ -10,6 +10,11 @@ import java.io.InputStreamReader
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
+import com.example.db.AppDatabase
+import com.example.db.Playlist
+import com.example.db.PlaylistItem
+import org.json.JSONArray
+import org.json.JSONObject
 
 class LocalVideoServer(
     private val context: Context,
@@ -18,6 +23,7 @@ class LocalVideoServer(
     private var serverSocket: ServerSocket? = null
     private var isRunning = false
     private val sharedFiles = ConcurrentHashMap<String, SharedVideo>()
+    private val appDatabase: AppDatabase by lazy { AppDatabase.getDatabase(context) }
 
     data class SharedVideo(
         val id: String,
@@ -142,6 +148,104 @@ class LocalVideoServer(
                 pathWithoutQuery == "/videos" -> {
                     val json = buildVideosJson()
                     sendSimpleResponse(socket, "200 OK", "application/json", json)
+                }
+                pathWithoutQuery == "/playlists" -> {
+                    try {
+                        val playlists = appDatabase.playlistDao().getAllPlaylistsSync()
+                        val jsonArray = JSONArray()
+                        for (playlistWithItems in playlists) {
+                            val pObj = JSONObject()
+                            pObj.put("id", playlistWithItems.playlist.id)
+                            pObj.put("name", playlistWithItems.playlist.name)
+                            pObj.put("timestamp", playlistWithItems.playlist.timestamp)
+                            val itemsArray = JSONArray()
+                            for (item in playlistWithItems.items) {
+                                val itemObj = JSONObject()
+                                itemObj.put("id", item.id)
+                                itemObj.put("videoId", item.videoId)
+                                itemObj.put("displayOrder", item.displayOrder)
+                                itemsArray.put(itemObj)
+                            }
+                            pObj.put("items", itemsArray)
+                            jsonArray.put(pObj)
+                        }
+                        sendSimpleResponse(socket, "200 OK", "application/json", jsonArray.toString())
+                    } catch (e: Exception) {
+                        Log.e("LocalVideoServer", "Error getting playlists", e)
+                        sendSimpleResponse(socket, "500 Internal Error", "text/plain", "Error getting playlists")
+                    }
+                }
+                pathWithoutQuery == "/playlists/create" -> {
+                    val params = parseQueryString(query)
+                    val name = params["name"]
+                    if (name != null) {
+                        try {
+                            appDatabase.playlistDao().insertPlaylistSync(Playlist(name = name))
+                            sendSimpleResponse(socket, "200 OK", "application/json", "{\"status\":\"success\"}")
+                        } catch(e: Exception) {
+                            sendSimpleResponse(socket, "500 Internal Error", "text/plain", "DB Error")
+                        }
+                    } else {
+                        sendSimpleResponse(socket, "400 Bad Request", "text/plain", "Missing name")
+                    }
+                }
+                pathWithoutQuery == "/playlists/add" -> {
+                    val params = parseQueryString(query)
+                    val playlistIdStr = params["playlistId"]
+                    val videoId = params["videoId"]
+                    if (playlistIdStr != null && videoId != null) {
+                        try {
+                            val playlistId = playlistIdStr.toInt()
+                            val maxOrder = appDatabase.playlistDao().getMaxDisplayOrderSync(playlistId)
+                            appDatabase.playlistDao().insertPlaylistItemSync(PlaylistItem(playlistId = playlistId, videoId = videoId, displayOrder = maxOrder + 1))
+                            sendSimpleResponse(socket, "200 OK", "application/json", "{\"status\":\"success\"}")
+                        } catch(e: Exception) {
+                            sendSimpleResponse(socket, "500 Internal Error", "text/plain", "DB Error")
+                        }
+                    } else {
+                        sendSimpleResponse(socket, "400 Bad Request", "text/plain", "Missing params")
+                    }
+                }
+                pathWithoutQuery == "/playlists/remove" -> {
+                    val params = parseQueryString(query)
+                    val playlistIdStr = params["playlistId"]
+                    val videoId = params["videoId"]
+                    if (playlistIdStr != null && videoId != null) {
+                        try {
+                            appDatabase.playlistDao().removePlaylistItemSync(playlistIdStr.toInt(), videoId)
+                            sendSimpleResponse(socket, "200 OK", "application/json", "{\"status\":\"success\"}")
+                        } catch(e: Exception) {
+                            sendSimpleResponse(socket, "500 Internal Error", "text/plain", "DB Error")
+                        }
+                    } else {
+                        sendSimpleResponse(socket, "400 Bad Request", "text/plain", "Missing params")
+                    }
+                }
+                pathWithoutQuery == "/playlists/quickqueue" -> {
+                    val params = parseQueryString(query)
+                    val videoId = params["videoId"]
+                    val queueName = params["name"] ?: "Up Next"
+                    if (videoId != null) {
+                        try {
+                            val db = appDatabase.playlistDao()
+                            var playlists = db.getAllPlaylistsSync()
+                            var queuePlaylist = playlists.find { it.playlist.name == queueName }?.playlist
+                            
+                            if (queuePlaylist == null) {
+                                val newId = db.insertPlaylistSync(Playlist(name = queueName)).toInt()
+                                queuePlaylist = Playlist(id = newId, name = queueName)
+                            }
+                            
+                            val maxOrder = db.getMaxDisplayOrderSync(queuePlaylist.id)
+                            db.insertPlaylistItemSync(PlaylistItem(playlistId = queuePlaylist.id, videoId = videoId, displayOrder = maxOrder + 1))
+                            
+                            sendSimpleResponse(socket, "200 OK", "application/json", "{\"status\":\"success\"}")
+                        } catch(e: Exception) {
+                            sendSimpleResponse(socket, "500 Internal Error", "text/plain", "DB Error")
+                        }
+                    } else {
+                        sendSimpleResponse(socket, "400 Bad Request", "text/plain", "Missing videoId")
+                    }
                 }
                 pathWithoutQuery == "/update_progress" -> {
                     val query = path.substringAfter("?", "")
