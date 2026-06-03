@@ -123,14 +123,12 @@ class PlayerActivity : FragmentActivity() {
                         if (index != -1) {
                             exoPlayer?.setMediaItems(items, index, 0L)
                             exoPlayer?.prepare()
-                            exoPlayer?.playWhenReady = true
                             return@post
                         }
                     }
                     if (index != -1) {
                         exoPlayer?.seekToDefaultPosition(index)
                         exoPlayer?.prepare()
-                        exoPlayer?.playWhenReady = true
                     }
                 }
             }
@@ -195,9 +193,17 @@ class PlayerActivity : FragmentActivity() {
                         if ((reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || 
                              reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK || 
                              reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED)) {
-                            if (video.watchedPosition > 1000 && !isWaitingForResume) {
-                                exoPlayer?.playWhenReady = false
+                            
+                            exoPlayer?.playWhenReady = false
+                            isWaitingForResume = false
+                            if (resumeDialog?.isShowing == true) {
+                                resumeDialog?.dismiss()
+                            }
+                            
+                            if (video.watchedPosition > 1000) {
                                 showResumeDialog(video)
+                            } else {
+                                exoPlayer?.playWhenReady = true
                             }
                         }
                     }

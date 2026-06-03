@@ -16,6 +16,21 @@ class CardPresenter : Presenter() {
         val cardView = object : ImageCardView(parent.context) {
             override fun setSelected(selected: Boolean) {
                 updateCardBackgroundColor(this, selected)
+                val titleTextView = findViewById<android.widget.TextView>(androidx.leanback.R.id.title_text)
+                titleTextView?.let {
+                    it.minLines = 2
+                    if (selected) {
+                        it.setSingleLine(true)
+                        it.ellipsize = android.text.TextUtils.TruncateAt.MARQUEE
+                        it.marqueeRepeatLimit = -1
+                        it.isSelected = true
+                    } else {
+                        it.setSingleLine(false)
+                        it.maxLines = 2
+                        it.ellipsize = android.text.TextUtils.TruncateAt.END
+                        it.isSelected = false
+                    }
+                }
                 super.setSelected(selected)
             }
         }
