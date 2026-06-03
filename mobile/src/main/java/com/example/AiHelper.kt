@@ -81,6 +81,10 @@ object AiHelper {
             
         val response = client.newCall(request).execute()
         if (!response.isSuccessful) {
+            val errorBody = response.body?.string() ?: ""
+            if (response.code == 403) {
+                throw Exception("Error 403: Forbidden. Your API Key is likely invalid, restricted, or not enabled for this service.")
+            }
             throw Exception("API Error: ${response.code} ${response.message}")
         }
         
