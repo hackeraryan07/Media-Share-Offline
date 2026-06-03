@@ -92,9 +92,10 @@ class LocalVideoServer(
         serverSocket = null
     }
 
-    private val connectedClients = mutableSetOf<String>()
+    data class ConnectedClient(val ip: String, val name: String)
+    private val connectedClientsMap = java.util.concurrent.ConcurrentHashMap<String, String>()
 
-    fun getConnectedClients(): List<String> = connectedClients.toList()
+    fun getConnectedClients(): List<ConnectedClient> = connectedClientsMap.map { ConnectedClient(it.key, it.value) }
 
     private fun handleClient(socket: Socket) {
         try {
@@ -109,9 +110,15 @@ class LocalVideoServer(
             val path = parts[1]
 
             // We can add client IP directly on any request, or verify it's the TV app asking.
-            // Since it's a closed network demo, let's just register IP.
-            if (!connectedClients.contains(clientIp)) {
-                connectedClients.add(clientIp)
+            // Check if deviceName is in the path
+            val query = path.substringAfter("?", "")
+            val params = parseQueryString(query)
+            val deviceName = params["deviceName"] ?: "Unknown Device"
+
+            if (path.startsWith("/videos")) {
+                connectedClientsMap[clientIp] = deviceName
+            } else if (!connectedClientsMap.containsKey(clientIp)) {
+                connectedClientsMap[clientIp] = deviceName
             }
 
             if (method != "GET") {

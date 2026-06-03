@@ -61,6 +61,12 @@ import com.example.server.ServerService
 import android.content.Intent
 import com.example.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.delay
+import androidx.compose.material.icons.filled.Tv
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import okhttp3.Request
 
 class MainActivity : ComponentActivity() {
 
@@ -98,6 +104,7 @@ fun ServerDashboardScreen(
     var selectedFolder by remember { mutableStateOf<String?>(null) }
     var connectedClients by remember { mutableStateOf(ServerManager.localVideoServer?.getConnectedClients() ?: emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
+    var showDevicePopupForVideo by remember { mutableStateOf<LocalVideoServer.SharedVideo?>(null) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -344,11 +351,11 @@ fun ServerDashboardScreen(
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.fillMaxWidth().weight(1f)
                         ) {
-                            items(connectedClients) { clIp ->
+                            items(connectedClients) { client ->
                                 Card(
                                     modifier = Modifier.fillMaxWidth().clickable {
                                         val intent = Intent(context, RemoteActivity::class.java).apply {
-                                            putExtra("tv_ip", clIp)
+                                            putExtra("tv_ip", client.ip)
                                         }
                                         context.startActivity(intent)
                                     },
@@ -379,7 +386,7 @@ fun ServerDashboardScreen(
                                             Spacer(modifier = Modifier.width(14.dp))
                                             Column {
                                                 Text(
-                                                    text = "TV Client ($clIp)",
+                                                    text = "${client.name} (${client.ip})",
                                                     fontWeight = FontWeight.SemiBold,
                                                     fontSize = 14.sp,
                                                     color = Color(0xFF1C1B1F)
@@ -645,7 +652,7 @@ fun ServerDashboardScreen(
                                 ) {
                                     items(displayedVideos) { video ->
                                         Card(
-                                            modifier = Modifier.fillMaxWidth(),
+                                            modifier = Modifier.fillMaxWidth().clickable { showDevicePopupForVideo = video },
                                             shape = RoundedCornerShape(16.dp),
                                             colors = CardDefaults.cardColors(containerColor = Color.White),
                                             border = BorderStroke(1.dp, Color(0xFFCAC4D0))
@@ -857,6 +864,54 @@ fun ServerDashboardScreen(
                 }
             }
         }
+    }
+
+    if (showDevicePopupForVideo != null) {
+        val video = showDevicePopupForVideo!!
+        AlertDialog(
+            onDismissRequest = { showDevicePopupForVideo = null },
+            title = { Text(text = "Play on Device", fontWeight = FontWeight.Bold) },
+            text = {
+                if (connectedClients.isEmpty()) {
+                    Text("No connected devices found.", color = Color(0xFF49454F))
+                } else {
+                    LazyColumn {
+                        items(connectedClients) { client ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        try {
+                                            val url = "http://${client.ip}:9000/command?action=play_video&id=${video.id}"
+                                            val request = Request.Builder().url(url).build()
+                                            OkHttpClient().newCall(request).execute().close()
+                                        } catch (e: Exception) {
+                                            Log.e("Popup", "Command failed: play_video", e)
+                                        }
+                                    }
+                                    showDevicePopupForVideo = null
+                                }.padding(vertical = 4.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, Color(0xFFCAC4D0))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Tv, contentDescription = "TV", tint = Color(0xFF6750A4))
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(text = client.name, fontWeight = FontWeight.Medium)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDevicePopupForVideo = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

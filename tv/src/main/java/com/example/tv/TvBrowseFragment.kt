@@ -72,8 +72,9 @@ class TvBrowseFragment : BrowseSupportFragment() {
     }
 
     private fun fetchVideos() {
+        val deviceName = java.net.URLEncoder.encode(android.os.Build.MODEL ?: "AndroidTV", "UTF-8")
         val formattedIp = if (serverIp.contains(":") && !serverIp.startsWith("[")) "[$serverIp]" else serverIp
-        val url = "http://$formattedIp:8999/videos"
+        val url = "http://$formattedIp:8999/videos?deviceName=$deviceName"
         val request = Request.Builder().url(url).build()
 
         client.newCall(request).enqueue(object : Callback {
