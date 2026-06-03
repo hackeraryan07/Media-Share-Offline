@@ -28,9 +28,6 @@ class PlayerActivity : FragmentActivity() {
     private var playlist: List<TvVideo>? = null
     private var currentIndex: Int = 0
     private var currentVideo: TvVideo? = null
-    
-    private var isWaitingForResume = false
-    private var resumeDialog: android.app.AlertDialog? = null
 
     private val progressRunnable = object : Runnable {
         override fun run() {
@@ -142,22 +139,6 @@ class PlayerActivity : FragmentActivity() {
                     exoPlayer?.seekTo(positionMs)
                 }
             }
-            override fun proceedResume(resume: Boolean) {
-                Handler(Looper.getMainLooper()).post {
-                    if (isWaitingForResume) {
-                        resumeDialog?.dismiss()
-                        resumeDialog = null
-                        isWaitingForResume = false
-                        if (resume) {
-                            currentVideo?.let { exoPlayer?.seekTo(it.watchedPosition) }
-                        } else {
-                            exoPlayer?.seekTo(0)
-                        }
-                        exoPlayer?.playWhenReady = true
-                        exoPlayer?.play()
-                    }
-                }
-            }
             override fun getState(): JSONObject {
                 val state = JSONObject()
                 state.put("videoId", currentVideo?.id ?: "")
@@ -166,22 +147,39 @@ class PlayerActivity : FragmentActivity() {
                 var playing = false
                 var position = 0L
                 var duration = 0L
+                var needsResume = false
+                var resumePos = 0L
                 val latch = java.util.concurrent.CountDownLatch(1)
                 Handler(Looper.getMainLooper()).post {
                     playing = exoPlayer?.isPlaying ?: false
                     position = exoPlayer?.currentPosition ?: 0L
                     duration = exoPlayer?.duration ?: 0L
+                    needsResume = isWaitingForResume
+                    resumePos = currentVideo?.watchedPosition ?: 0L
                     latch.countDown()
                 }
                 try { latch.await(1, java.util.concurrent.TimeUnit.SECONDS) } catch (e: Exception) {}
                 state.put("isPlaying", playing)
                 state.put("position", position)
                 state.put("duration", duration)
-                state.put("waitingForResume", isWaitingForResume)
+                state.put("needsResumeChoice", needsResume)
+                state.put("resumePosition", resumePos)
                 return state
+            }
+            override fun handleResumeChoice(choice: String) {
+                Handler(Looper.getMainLooper()).post {
+                    this@PlayerActivity.handleResumeChoice(choice, currentVideo?.watchedPosition ?: 0L)
+                }
             }
         }
         
+        if (currentVideo!!.watchedPosition > 1000) { // Only resume if progress is more than 1 second to avoid tiny glitches
+            exoPlayer?.playWhenReady = false
+            showResumeDialog(currentVideo!!)
+        } else {
+            exoPlayer?.playWhenReady = true
+        }
+
         scheduleMetadataHide()
 
         exoPlayer?.addListener(object : Player.Listener {
@@ -194,12 +192,13 @@ class PlayerActivity : FragmentActivity() {
                         videoUrlString = video.url
                         showMetadataTemp()
                         
-                        if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT && video.watchedPosition > 1000) {
-                            exoPlayer?.playWhenReady = false // Pause first
-                            isWaitingForResume = true
-                            showResumeDialog(video)
-                        } else {
-                            exoPlayer?.playWhenReady = true
+                        if ((reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || 
+                             reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK || 
+                             reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED)) {
+                            if (video.watchedPosition > 1000 && !isWaitingForResume) {
+                                exoPlayer?.playWhenReady = false
+                                showResumeDialog(video)
+                            }
                         }
                     }
                 }
@@ -227,6 +226,25 @@ class PlayerActivity : FragmentActivity() {
         progressHandler.postDelayed(progressRunnable, 3000)
     }
 
+    private var isWaitingForResume = false
+    private var resumeDialog: android.app.AlertDialog? = null
+
+    // Called from TV Dialog OR from Remote Command
+    fun handleResumeChoice(choice: String, position: Long) {
+        if (!isWaitingForResume) return
+        isWaitingForResume = false
+        if (resumeDialog?.isShowing == true) {
+            resumeDialog?.dismiss()
+        }
+        if (choice == "continue") {
+            exoPlayer?.seekTo(position)
+        } else {
+            exoPlayer?.seekTo(0)
+        }
+        exoPlayer?.playWhenReady = true
+        exoPlayer?.play()
+    }
+
     private fun formatTime(ms: Long): String {
         val totalSecs = ms / 1000
         val mins = totalSecs / 60
@@ -235,25 +253,20 @@ class PlayerActivity : FragmentActivity() {
     }
 
     private fun showResumeDialog(video: TvVideo) {
-        resumeDialog?.dismiss()
+        if (resumeDialog?.isShowing == true) {
+            resumeDialog?.dismiss()
+        }
+        isWaitingForResume = true
         val builder = android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
         builder.setTitle("Resume Playback?")
         builder.setMessage("Would you like to resume \"${video.title}\" from ${formatTime(video.watchedPosition)}?")
         builder.setPositiveButton("Continue") { dialog, _ ->
-            isWaitingForResume = false
-            exoPlayer?.seekTo(video.watchedPosition)
-            exoPlayer?.playWhenReady = true
-            exoPlayer?.play()
+            handleResumeChoice("continue", video.watchedPosition)
             dialog.dismiss()
-            resumeDialog = null
         }
         builder.setNegativeButton("Start Over") { dialog, _ ->
-            isWaitingForResume = false
-            exoPlayer?.seekTo(0)
-            exoPlayer?.playWhenReady = true
-            exoPlayer?.play()
+            handleResumeChoice("start_over", 0L)
             dialog.dismiss()
-            resumeDialog = null
         }
         builder.setCancelable(false)
         resumeDialog = builder.create()
