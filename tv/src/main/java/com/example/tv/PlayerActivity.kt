@@ -28,6 +28,9 @@ class PlayerActivity : FragmentActivity() {
     private var playlist: List<TvVideo>? = null
     private var currentIndex: Int = 0
     private var currentVideo: TvVideo? = null
+    
+    private var isWaitingForResume = false
+    private var resumeDialog: android.app.AlertDialog? = null
 
     private val progressRunnable = object : Runnable {
         override fun run() {
@@ -139,6 +142,22 @@ class PlayerActivity : FragmentActivity() {
                     exoPlayer?.seekTo(positionMs)
                 }
             }
+            override fun proceedResume(resume: Boolean) {
+                Handler(Looper.getMainLooper()).post {
+                    if (isWaitingForResume) {
+                        resumeDialog?.dismiss()
+                        resumeDialog = null
+                        isWaitingForResume = false
+                        if (resume) {
+                            currentVideo?.let { exoPlayer?.seekTo(it.watchedPosition) }
+                        } else {
+                            exoPlayer?.seekTo(0)
+                        }
+                        exoPlayer?.playWhenReady = true
+                        exoPlayer?.play()
+                    }
+                }
+            }
             override fun getState(): JSONObject {
                 val state = JSONObject()
                 state.put("videoId", currentVideo?.id ?: "")
@@ -158,17 +177,11 @@ class PlayerActivity : FragmentActivity() {
                 state.put("isPlaying", playing)
                 state.put("position", position)
                 state.put("duration", duration)
+                state.put("waitingForResume", isWaitingForResume)
                 return state
             }
         }
         
-        if (currentVideo!!.watchedPosition > 1000) { // Only resume if progress is more than 1 second to avoid tiny glitches
-            exoPlayer?.playWhenReady = false
-            showResumeDialog(currentVideo!!)
-        } else {
-            exoPlayer?.playWhenReady = true
-        }
-
         scheduleMetadataHide()
 
         exoPlayer?.addListener(object : Player.Listener {
@@ -180,6 +193,14 @@ class PlayerActivity : FragmentActivity() {
                         titleText.text = video.title
                         videoUrlString = video.url
                         showMetadataTemp()
+                        
+                        if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT && video.watchedPosition > 1000) {
+                            exoPlayer?.playWhenReady = false // Pause first
+                            isWaitingForResume = true
+                            showResumeDialog(video)
+                        } else {
+                            exoPlayer?.playWhenReady = true
+                        }
                     }
                 }
             }
@@ -214,24 +235,29 @@ class PlayerActivity : FragmentActivity() {
     }
 
     private fun showResumeDialog(video: TvVideo) {
+        resumeDialog?.dismiss()
         val builder = android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
         builder.setTitle("Resume Playback?")
         builder.setMessage("Would you like to resume \"${video.title}\" from ${formatTime(video.watchedPosition)}?")
         builder.setPositiveButton("Continue") { dialog, _ ->
+            isWaitingForResume = false
             exoPlayer?.seekTo(video.watchedPosition)
             exoPlayer?.playWhenReady = true
             exoPlayer?.play()
             dialog.dismiss()
+            resumeDialog = null
         }
         builder.setNegativeButton("Start Over") { dialog, _ ->
+            isWaitingForResume = false
             exoPlayer?.seekTo(0)
             exoPlayer?.playWhenReady = true
             exoPlayer?.play()
             dialog.dismiss()
+            resumeDialog = null
         }
         builder.setCancelable(false)
-        val dialog = builder.create()
-        dialog.show()
+        resumeDialog = builder.create()
+        resumeDialog?.show()
     }
 
     private fun sendProgressUpdate(videoId: String, position: Long, duration: Long) {

@@ -58,6 +58,7 @@ fun RemoteScreen(tvIp: String, onBack: () -> Unit) {
     var position by remember { mutableStateOf(0L) }
     var duration by remember { mutableStateOf(0L) }
     var isSeeking by remember { mutableStateOf(false) }
+    var waitingForResume by remember { mutableStateOf(false) }
     
     val client = remember { OkHttpClient() }
     val videoList = remember { ServerManager.localVideoServer?.getVideosList() ?: emptyList() }
@@ -73,6 +74,7 @@ fun RemoteScreen(tvIp: String, onBack: () -> Unit) {
                             if (body != null) {
                                 val json = JSONObject(body)
                                 isPlaying = json.optBoolean("isPlaying", false)
+                                waitingForResume = json.optBoolean("waitingForResume", false)
                                 val t = json.optString("title", "")
                                 currentTitle = if (t.isNotBlank()) t else null
                                 val vId = json.optString("videoId", "")
@@ -283,5 +285,29 @@ fun RemoteScreen(tvIp: String, onBack: () -> Unit) {
                 }
             }
         }
+    }
+
+    if (waitingForResume) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Resume Playback?", fontWeight = FontWeight.Bold) },
+            text = { Text("The video \"${currentTitle ?: ""}\" was partially watched. How would you like to proceed?", color = Color(0xFF49454F)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    waitingForResume = false
+                    sendCommand("resume_playback&resume=true")
+                }) {
+                    Text("Continue")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    waitingForResume = false
+                    sendCommand("resume_playback&resume=false")
+                }) {
+                    Text("Start Over")
+                }
+            }
+        )
     }
 }

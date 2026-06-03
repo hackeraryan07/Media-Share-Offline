@@ -23,6 +23,7 @@ object TvRemoteServer {
         fun prev()
         fun playVideo(id: String)
         fun seekTo(positionMs: Long)
+        fun proceedResume(resume: Boolean)
         fun getState(): JSONObject
     }
 
@@ -98,6 +99,12 @@ object TvRemoteServer {
                                 val posStr = params["position"]
                                 if (posStr != null) {
                                     playerController?.seekTo(posStr.toLongOrNull() ?: 0L)
+                                }
+                            }
+                            "resume_playback" -> {
+                                val resumeStr = params["resume"]
+                                if (resumeStr != null) {
+                                    playerController?.proceedResume(resumeStr == "true")
                                 }
                             }
                         }
