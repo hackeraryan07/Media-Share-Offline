@@ -221,32 +221,6 @@ class LocalVideoServer(
                         sendSimpleResponse(socket, "400 Bad Request", "text/plain", "Missing params")
                     }
                 }
-                pathWithoutQuery == "/playlists/quickqueue" -> {
-                    val params = parseQueryString(query)
-                    val videoId = params["videoId"]
-                    val queueName = params["name"] ?: "Up Next"
-                    if (videoId != null) {
-                        try {
-                            val db = appDatabase.playlistDao()
-                            var playlists = db.getAllPlaylistsSync()
-                            var queuePlaylist = playlists.find { it.playlist.name == queueName }?.playlist
-                            
-                            if (queuePlaylist == null) {
-                                val newId = db.insertPlaylistSync(Playlist(name = queueName)).toInt()
-                                queuePlaylist = Playlist(id = newId, name = queueName)
-                            }
-                            
-                            val maxOrder = db.getMaxDisplayOrderSync(queuePlaylist.id)
-                            db.insertPlaylistItemSync(PlaylistItem(playlistId = queuePlaylist.id, videoId = videoId, displayOrder = maxOrder + 1))
-                            
-                            sendSimpleResponse(socket, "200 OK", "application/json", "{\"status\":\"success\"}")
-                        } catch(e: Exception) {
-                            sendSimpleResponse(socket, "500 Internal Error", "text/plain", "DB Error")
-                        }
-                    } else {
-                        sendSimpleResponse(socket, "400 Bad Request", "text/plain", "Missing videoId")
-                    }
-                }
                 pathWithoutQuery == "/update_progress" -> {
                     val query = path.substringAfter("?", "")
                     val params = parseQueryString(query)

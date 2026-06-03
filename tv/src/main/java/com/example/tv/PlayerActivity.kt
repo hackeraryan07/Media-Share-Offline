@@ -15,16 +15,12 @@ import androidx.media3.ui.PlayerView
 
 import org.json.JSONObject
 
-import android.widget.Button
-import android.widget.Toast
-
 class PlayerActivity : FragmentActivity() {
 
     private lateinit var playerView: PlayerView
     private var exoPlayer: ExoPlayer? = null
     private lateinit var metaOverlay: View
     private lateinit var titleText: TextView
-    private lateinit var btnAddQueue: Button
     private val hideHandler = Handler(Looper.getMainLooper())
     private var videoUrlString: String? = null
     private val progressHandler = Handler(Looper.getMainLooper())
@@ -61,7 +57,6 @@ class PlayerActivity : FragmentActivity() {
         playerView = findViewById(R.id.video_view)
         metaOverlay = findViewById(R.id.player_meta_overlay)
         titleText = findViewById(R.id.player_video_title)
-        btnAddQueue = findViewById(R.id.btn_add_queue)
 
         currentVideo = intent.getSerializableExtra("video") as? TvVideo
         playlist = intent.getSerializableExtra("playlist") as? ArrayList<TvVideo>
@@ -72,37 +67,7 @@ class PlayerActivity : FragmentActivity() {
             return
         }
 
-        btnAddQueue.setOnClickListener {
-            currentVideo?.let {
-                addToUpNext(it.id)
-            }
-            btnAddQueue.text = "Added to Queue!"
-            Handler(Looper.getMainLooper()).postDelayed({
-                btnAddQueue.text = "Add to Up Next"
-            }, 2000)
-        }
-
         initializePlayer()
-    }
-    
-    private fun addToUpNext(videoId: String) {
-        val videoUrl = videoUrlString
-        if (videoUrl.isNullOrEmpty() || !videoUrl.startsWith("http")) return
-        
-        val uri = Uri.parse(videoUrl)
-        val scheme = uri.scheme ?: "http"
-        val host = uri.host ?: "127.0.0.1"
-        val port = uri.port
-        val baseUrl = if (port != -1) "$scheme://$host:$port" else "$scheme://$host"
-        
-        val addUrl = "$baseUrl/playlists/quickqueue?videoId=$videoId&name=Up%20Next"
-        
-        val client = okhttp3.OkHttpClient()
-        val request = okhttp3.Request.Builder().url(addUrl).build()
-        client.newCall(request).enqueue(object : okhttp3.Callback {
-            override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {}
-            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) { response.close() }
-        })
     }
 
     private fun getVideoById(id: String): TvVideo? {
