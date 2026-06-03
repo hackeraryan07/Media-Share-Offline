@@ -137,12 +137,13 @@ class LocalVideoServer(
                 }
             }
 
+            val pathWithoutQuery = path.substringBefore("?")
             when {
-                path == "/videos" -> {
+                pathWithoutQuery == "/videos" -> {
                     val json = buildVideosJson()
                     sendSimpleResponse(socket, "200 OK", "application/json", json)
                 }
-                path.startsWith("/update_progress") -> {
+                pathWithoutQuery == "/update_progress" -> {
                     val query = path.substringAfter("?", "")
                     val params = parseQueryString(query)
                     val id = params["id"]
