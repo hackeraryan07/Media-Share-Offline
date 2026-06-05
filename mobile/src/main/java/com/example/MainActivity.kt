@@ -877,6 +877,8 @@ fun ServerDashboardScreen(
                             Text("No playlists yet.", color = Color(0xFF49454F))
                         }
                     } else {
+                        var playlistToDelete by remember { mutableStateOf<com.example.db.Playlist?>(null) }
+
                         LazyColumn(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -898,15 +900,38 @@ fun ServerDashboardScreen(
                                             Text("${playlistInfo.items.size} videos", fontSize = 12.sp, color = Color(0xFF49454F))
                                         }
                                         IconButton(onClick = {
-                                            CoroutineScope(Dispatchers.IO).launch {
-                                                db.playlistDao().deletePlaylistSync(playlistInfo.playlist.id)
-                                            }
+                                            playlistToDelete = playlistInfo.playlist
                                         }) {
                                             Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red)
                                         }
                                     }
                                 }
                             }
+                        }
+
+                        if (playlistToDelete != null) {
+                            AlertDialog(
+                                onDismissRequest = { playlistToDelete = null },
+                                title = { Text("Delete Playlist") },
+                                text = { Text("Are you sure you want to delete '${playlistToDelete?.name}'?") },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        playlistToDelete?.let { p ->
+                                            CoroutineScope(Dispatchers.IO).launch {
+                                                db.playlistDao().deletePlaylistSync(p.id)
+                                            }
+                                        }
+                                        playlistToDelete = null
+                                    }) {
+                                        Text("Delete", color = Color.Red)
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { playlistToDelete = null }) {
+                                        Text("Cancel")
+                                    }
+                                }
+                            )
                         }
                     }
                 }

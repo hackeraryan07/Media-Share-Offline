@@ -105,7 +105,8 @@ class LocalVideoServer(
 
     private fun handleClient(socket: Socket) {
         try {
-            val clientIp = socket.inetAddress.hostAddress ?: "Unknown IP"
+            val rawClientIp = socket.inetAddress.hostAddress ?: "Unknown IP"
+            val clientIp = rawClientIp.replaceFirst("::ffff:", "")
             val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
             val firstLine = reader.readLine() ?: return
             Log.d("LocalVideoServer", "Client Request: $firstLine")
@@ -121,10 +122,13 @@ class LocalVideoServer(
             val params = parseQueryString(query)
             val deviceName = params["deviceName"] ?: "Unknown Device"
 
-            if (path.startsWith("/videos")) {
-                connectedClientsMap[clientIp] = deviceName
-            } else if (!connectedClientsMap.containsKey(clientIp)) {
-                connectedClientsMap[clientIp] = deviceName
+            val isLoopback = clientIp == "127.0.0.1" || clientIp == "::1" || clientIp == "0:0:0:0:0:0:0:1"
+            if (!isLoopback) {
+                if (path.startsWith("/videos")) {
+                    connectedClientsMap[clientIp] = deviceName
+                } else if (!connectedClientsMap.containsKey(clientIp)) {
+                    connectedClientsMap[clientIp] = deviceName
+                }
             }
 
             if (method != "GET") {
