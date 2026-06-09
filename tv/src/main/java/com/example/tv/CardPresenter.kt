@@ -75,15 +75,20 @@ class CardPresenter : Presenter() {
                 tag = "card_duration_label"
                 setTextColor(Color.WHITE)
                 textSize = 12f
-                setBackgroundColor(Color.parseColor("#99000000")) // semi-transparent black
-                setPadding(8, 4, 8, 4)
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    setColor(Color.parseColor("#CC000000"))
+                    cornerRadius = 8f
+                }
+                setPadding(12, 4, 12, 4)
                 val params = android.widget.FrameLayout.LayoutParams(
                     android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
                     android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
                 ).apply {
                     gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
-                    bottomMargin = 10
-                    marginEnd = 10
+                    bottomMargin = 12
+                    marginEnd = 12
                 }
                 layoutParams = params
             }
