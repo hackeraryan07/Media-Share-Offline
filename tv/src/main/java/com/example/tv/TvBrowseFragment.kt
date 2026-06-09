@@ -71,6 +71,10 @@ class TvBrowseFragment : BrowseSupportFragment() {
         listRowPresenter.headerPresenter = IconHeaderItemPresenter()
         rowsAdapter = ArrayObjectAdapter(listRowPresenter)
         adapter = rowsAdapter
+        
+        setHeaderPresenterSelector(androidx.leanback.widget.ClassPresenterSelector().apply {
+            addClassPresenter(androidx.leanback.widget.Row::class.java, IconHeaderItemPresenter())
+        })
     }
 
     private fun fetchVideos() {

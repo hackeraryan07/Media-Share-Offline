@@ -26,8 +26,8 @@ class IconHeaderItemPresenter : RowHeaderPresenter() {
                 marginEnd = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8f, resources.displayMetrics).toInt()
             }
         }
-        val text = TextView(context).apply {
-            id = android.R.id.title
+        val text = androidx.leanback.widget.RowHeaderView(context).apply {
+            id = androidx.leanback.R.id.row_header
             textSize = 20f
             setTextColor(Color.WHITE)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -37,15 +37,16 @@ class IconHeaderItemPresenter : RowHeaderPresenter() {
         // required to ensure row selection highlighting works correctly
         layout.isFocusable = false
         layout.isFocusableInTouchMode = false
-        return ViewHolder(layout)
+        return RowHeaderPresenter.ViewHolder(layout)
     }
 
     override fun onBindViewHolder(viewHolder: Presenter.ViewHolder, item: Any?) {
-        val headerItem = (item as? androidx.leanback.widget.Row)?.headerItem
+        super.onBindViewHolder(viewHolder, item)
+        val headerItem = if (item is androidx.leanback.widget.Row) item.headerItem else item as? androidx.leanback.widget.HeaderItem
         if (headerItem == null) return
         val view = viewHolder.view
-        val textView = view.findViewById<TextView>(android.R.id.title)
         val iconView = view.findViewById<ImageView>(android.R.id.icon)
+        val textView = view.findViewById<TextView>(androidx.leanback.R.id.row_header)
         
         textView.text = headerItem.name
         
@@ -53,9 +54,15 @@ class IconHeaderItemPresenter : RowHeaderPresenter() {
             iconView.setImageResource(R.drawable.ic_playlist)
             textView.text = headerItem.name?.removePrefix("Playlist: ")
             iconView.setColorFilter(Color.parseColor("#FF4081")) // Pink for playlist
+            iconView.visibility = android.view.View.VISIBLE
+        } else if (headerItem.name == "All Videos" || headerItem.name == "Search Results") {
+            iconView.setImageResource(R.drawable.ic_folder)
+            iconView.setColorFilter(Color.parseColor("#03A9F4")) // Blue for folder
+            iconView.visibility = android.view.View.VISIBLE
         } else {
             iconView.setImageResource(R.drawable.ic_folder)
             iconView.setColorFilter(Color.parseColor("#03A9F4")) // Blue for folder
+            iconView.visibility = android.view.View.VISIBLE
         }
     }
 }
