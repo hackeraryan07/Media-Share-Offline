@@ -33,7 +33,9 @@ class TvSearchFragment : SearchSupportFragment(), SearchSupportFragment.SearchRe
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        rowsAdapter = ArrayObjectAdapter(ListRowPresenter())
+        val listRowPresenter = ListRowPresenter()
+        listRowPresenter.headerPresenter = IconHeaderItemPresenter()
+        rowsAdapter = ArrayObjectAdapter(listRowPresenter)
         setSearchResultProvider(this)
 
         serverIp = activity?.intent?.getStringExtra("server_ip") ?: "127.0.0.1"
