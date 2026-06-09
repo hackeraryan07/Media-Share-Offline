@@ -179,16 +179,50 @@ class TvBrowseFragment : BrowseSupportFragment() {
     private fun appendPlaylistRows(playlistRows: List<ListRow>) {
         if (rowsAdapter.size() == 0) return
         
-        // Remove existing playlist rows
-        for (i in rowsAdapter.size() - 1 downTo 0) {
+        // Find existing playlist rows
+        val existingPlaylists = mutableListOf<Pair<Int, ListRow>>()
+        for (i in 0 until rowsAdapter.size()) {
             val row = rowsAdapter.get(i) as? ListRow
             if (row != null && row.headerItem?.name?.startsWith("Playlist:") == true) {
-                rowsAdapter.removeItems(i, 1)
+                existingPlaylists.add(Pair(i, row))
             }
         }
         
-        for (row in playlistRows) {
-            rowsAdapter.add(row)
+        var rebuildPlaylists = existingPlaylists.size != playlistRows.size
+        if (!rebuildPlaylists) {
+            for (i in existingPlaylists.indices) {
+                if (existingPlaylists[i].second.headerItem.name != playlistRows[i].headerItem.name) {
+                    rebuildPlaylists = true
+                    break
+                }
+            }
+        }
+        
+        if (rebuildPlaylists) {
+            // Remove existing playlist rows
+            for (i in rowsAdapter.size() - 1 downTo 0) {
+                val row = rowsAdapter.get(i) as? ListRow
+                if (row != null && row.headerItem?.name?.startsWith("Playlist:") == true) {
+                    rowsAdapter.removeItems(i, 1)
+                }
+            }
+            // Add new ones
+            for (row in playlistRows) {
+                rowsAdapter.add(row)
+            }
+        } else {
+            // Update items in place to avoid focus lose
+            for (i in existingPlaylists.indices) {
+                val existingRow = existingPlaylists[i].second
+                val newRow = playlistRows[i]
+                
+                val existingRowAdapter = existingRow.adapter as ArrayObjectAdapter
+                val newItems = mutableListOf<TvVideo>()
+                for (j in 0 until newRow.adapter.size()) {
+                    newItems.add(newRow.adapter.get(j) as TvVideo)
+                }
+                existingRowAdapter.setItems(newItems, videoDiffCallback)
+            }
         }
     }
 
@@ -222,11 +256,18 @@ class TvBrowseFragment : BrowseSupportFragment() {
             expectedHeaders.addAll(groupedByFolder.keys)
         }
 
-        var rebuild = rowsAdapter.size() == 0 || rowsAdapter.size() != expectedHeaders.size
+        val currentLocalRows = mutableListOf<ListRow>()
+        for (i in 0 until rowsAdapter.size()) {
+            val row = rowsAdapter.get(i) as? ListRow
+            if (row != null && row.headerItem?.name?.startsWith("Playlist:") != true) {
+                currentLocalRows.add(row)
+            }
+        }
+
+        var rebuild = currentLocalRows.size != expectedHeaders.size
         if (!rebuild) {
-             for (i in 0 until rowsAdapter.size()) {
-                 val row = rowsAdapter.get(i) as? ListRow
-                 if (row == null || row.headerItem.name != expectedHeaders[i]) {
+             for (i in 0 until currentLocalRows.size) {
+                 if (currentLocalRows[i].headerItem.name != expectedHeaders[i]) {
                      rebuild = true
                      break
                  }
