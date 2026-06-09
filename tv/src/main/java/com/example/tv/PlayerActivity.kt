@@ -206,10 +206,16 @@ class PlayerActivity : FragmentActivity() {
             }
         }
         
-        if (currentVideo!!.watchedPosition > 1000) { // Only resume if progress is more than 1 second to avoid tiny glitches
+        val watchedPos = currentVideo!!.watchedPosition
+        val totDur = currentVideo!!.totalDuration
+        val isCompleted = totDur > 0L && watchedPos >= totDur - 5000L
+        if (watchedPos > 1000 && !isCompleted) { // Only resume if progress is more than 1 second to avoid tiny glitches
             exoPlayer?.playWhenReady = false
             showResumeDialog(currentVideo!!)
         } else {
+            if (isCompleted) {
+                exoPlayer?.seekTo(0L)
+            }
             exoPlayer?.playWhenReady = true
         }
 
@@ -235,9 +241,15 @@ class PlayerActivity : FragmentActivity() {
                                 resumeDialog?.dismiss()
                             }
                             
-                            if (video.watchedPosition > 1000) {
+                            val watched = video.watchedPosition
+                            val total = video.totalDuration
+                            val completed = total > 0L && watched >= total - 5000L
+                            if (watched > 1000 && !completed) {
                                 showResumeDialog(video)
                             } else {
+                                if (completed) {
+                                    exoPlayer?.seekTo(0L)
+                                }
                                 exoPlayer?.playWhenReady = true
                             }
                         }
@@ -247,9 +259,9 @@ class PlayerActivity : FragmentActivity() {
             
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) {
-                    // Reset progress when fully played to the end
+                    val finalDuration = exoPlayer?.duration?.takeIf { it > 0 } ?: currentVideo?.totalDuration ?: 0L
                     currentVideo?.let { video ->
-                        sendProgressUpdate(video.id, 0L, 0L)
+                        sendProgressUpdate(video.id, finalDuration, finalDuration)
                     }
                     if (exoPlayer?.hasNextMediaItem() == false) {
                         finish()
@@ -343,6 +355,7 @@ class PlayerActivity : FragmentActivity() {
 
     private fun saveFinalProgress() {
         exoPlayer?.let { player ->
+            if (player.playbackState == Player.STATE_ENDED) return
             val currentPos = player.currentPosition
             val duration = player.duration
             if (duration > 0 && currentPos >= 0 && currentPos < duration) {

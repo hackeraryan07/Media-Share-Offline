@@ -551,7 +551,7 @@ fun ServerDashboardScreen(
                                                 if (video.totalDuration > 0L && video.watchedPosition > 0L) {
                                                     Spacer(modifier = Modifier.height(6.dp))
                                                     LinearProgressIndicator(
-                                                        progress = video.watchedPosition.toFloat() / video.totalDuration.toFloat(),
+                                                        progress = (video.watchedPosition.toFloat() / video.totalDuration.toFloat()).coerceIn(0f, 1f),
                                                         modifier = Modifier.fillMaxWidth().height(4.dp),
                                                         color = Color(0xFFE11D48),
                                                         trackColor = Color(0xFFFFD1D1)
@@ -715,7 +715,7 @@ fun ServerDashboardScreen(
                                                     if (video.totalDuration > 0L && video.watchedPosition > 0L) {
                                                         Spacer(modifier = Modifier.height(6.dp))
                                                         LinearProgressIndicator(
-                                                            progress = video.watchedPosition.toFloat() / video.totalDuration.toFloat(),
+                                                            progress = (video.watchedPosition.toFloat() / video.totalDuration.toFloat()).coerceIn(0f, 1f),
                                                             modifier = Modifier.fillMaxWidth().height(4.dp),
                                                             color = Color(0xFFE11D48),
                                                             trackColor = Color(0xFFFFD1D1)

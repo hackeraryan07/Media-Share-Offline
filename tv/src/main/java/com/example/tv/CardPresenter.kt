@@ -111,12 +111,12 @@ class CardPresenter : Presenter() {
             cardView.addView(progressBar)
         }
 
-        val hasProgress = video.totalDuration > 0 && video.watchedPosition > 1000 && video.id != "err"
+        val hasProgress = video.totalDuration > 0 && video.id != "err"
         if (hasProgress) {
             val pct = (video.watchedPosition * 100 / video.totalDuration).toInt()
-            if (pct in 1..98) {
+            if (pct > 0) {
                 progressBar.alpha = 1f
-                progressBar.progress = pct
+                progressBar.progress = pct.coerceIn(0, 100)
             } else {
                 progressBar.alpha = 0f
             }
