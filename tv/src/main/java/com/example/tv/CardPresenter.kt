@@ -68,40 +68,6 @@ class CardPresenter : Presenter() {
             cardView.mainImage = gradient
         }
 
-        // Programmatically overlay a duration label on the thumbnail image
-        var durationLabel = cardView.findViewWithTag<android.widget.TextView>("card_duration_label")
-        if (durationLabel == null) {
-            durationLabel = android.widget.TextView(cardView.context).apply {
-                tag = "card_duration_label"
-                setTextColor(Color.WHITE)
-                textSize = 12f
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-                    setColor(Color.parseColor("#CC000000"))
-                    cornerRadius = 8f
-                }
-                setPadding(12, 4, 12, 4)
-                val params = android.widget.FrameLayout.LayoutParams(
-                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
-                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
-                    bottomMargin = 12
-                    marginEnd = 12
-                }
-                layoutParams = params
-            }
-            cardView.addView(durationLabel)
-        }
-        
-        if (video.duration.isNotBlank() && video.duration != "Unknown" && video.id != "err") {
-            durationLabel.text = video.duration
-            durationLabel.visibility = android.view.View.VISIBLE
-        } else {
-            durationLabel.visibility = android.view.View.GONE
-        }
-
         // Programmatically overlay a horizontal progress bar at the bottom of the thumbnail image
         var progressBar = cardView.findViewWithTag<android.widget.ProgressBar>("card_progress_bar")
         if (progressBar == null) {

@@ -149,9 +149,8 @@ fun ServerDashboardScreen(
         if (uri != null) {
             val name = getFileName(context, uri) ?: "Selected Mobile Stream"
             val size = getFileSize(context, uri)
-            val duration = getVideoDuration(context, uri)
             val randomId = "local_" + System.currentTimeMillis()
-            ServerManager.localVideoServer?.addLocalVideo(randomId, name, uri, size, "Local", duration)
+            ServerManager.localVideoServer?.addLocalVideo(randomId, name, uri, size)
         }
     }
 
@@ -1217,32 +1216,6 @@ private fun formatBytes(bytes: Long): String {
     return String.format("%.2f %s", bytes / Math.pow(1024.0, digitGroups.toDouble()), units[digitGroups])
 }
 
-private fun formatDuration(durationMs: Long): String {
-    if (durationMs <= 0) return "Unknown"
-    val seconds = (durationMs / 1000) % 60
-    val minutes = (durationMs / (1000 * 60)) % 60
-    val hours = durationMs / (1000 * 60 * 60)
-    return if (hours > 0) {
-        String.format("%d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format("%02d:%02d", minutes, seconds)
-    }
-}
-
-private fun getVideoDuration(context: Context, uri: Uri): String {
-    try {
-        val retriever = android.media.MediaMetadataRetriever()
-        retriever.setDataSource(context, uri)
-        val timeContent = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
-        retriever.release()
-        val durationMs = timeContent?.toLongOrNull() ?: 0L
-        return formatDuration(durationMs)
-    } catch (e: Exception) {
-        Log.e("MainActivity", "Error getting video duration", e)
-    }
-    return "Unknown"
-}
-
 private fun scanLocalMedia(context: Context, localVideoServer: LocalVideoServer) {
     val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
@@ -1254,8 +1227,7 @@ private fun scanLocalMedia(context: Context, localVideoServer: LocalVideoServer)
         MediaStore.Video.Media._ID,
         MediaStore.Video.Media.DISPLAY_NAME,
         MediaStore.Video.Media.SIZE,
-        MediaStore.Video.Media.BUCKET_DISPLAY_NAME,
-        MediaStore.Video.Media.DURATION
+        MediaStore.Video.Media.BUCKET_DISPLAY_NAME
     )
 
     try {
@@ -1270,21 +1242,18 @@ private fun scanLocalMedia(context: Context, localVideoServer: LocalVideoServer)
             val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
             val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
             val bucketColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.BUCKET_DISPLAY_NAME)
-            val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
                 val name = cursor.getString(nameColumn) ?: "Unknown Video"
                 val size = cursor.getLong(sizeColumn)
                 val folder = cursor.getString(bucketColumn) ?: "Internal Storage"
-                val durationMs = cursor.getLong(durationColumn)
-                val durationStr = formatDuration(durationMs)
 
                 val contentUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
                 val strId = "local_media_$id"
                 // Check if already exist to prevent dupes if rescanned
                 if (localVideoServer.getVideosList().none { it.id == strId }) {
-                    localVideoServer.addLocalVideo(strId, name, contentUri, size, folder, durationStr)
+                    localVideoServer.addLocalVideo(strId, name, contentUri, size, folder)
                 }
             }
         }

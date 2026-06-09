@@ -42,9 +42,9 @@ class LocalVideoServer(
         // No presets loaded. Waiting for local files to be shared.
     }
 
-    fun addLocalVideo(id: String, title: String, uri: Uri, size: Long, folder: String = "Local", duration: String = "Unknown") {
+    fun addLocalVideo(id: String, title: String, uri: Uri, size: Long, folder: String = "Local") {
         val thumbUrl = "http://127.0.0.1:$port/thumbnail/$id"
-        sharedFiles[id] = SharedVideo(id, title, uri.toString(), size, duration, isLocal = true, folder = folder, thumbnailUrl = thumbUrl)
+        sharedFiles[id] = SharedVideo(id, title, uri.toString(), size, "Local", isLocal = true, folder = folder, thumbnailUrl = thumbUrl)
     }
 
     fun getVideosList(): List<SharedVideo> {
