@@ -33,7 +33,7 @@ class PlayerActivity : FragmentActivity() {
     private var resumeDialog: android.app.AlertDialog? = null
 
     private lateinit var videoFragment: VideoSupportFragment
-    private lateinit var playerGlue: PlaybackTransportControlGlue<LeanbackPlayerAdapter>
+    private lateinit var playerGlue: CustomPlaybackControlGlue<LeanbackPlayerAdapter>
 
     private val progressRunnable = object : Runnable {
         override fun run() {
@@ -74,6 +74,21 @@ class PlayerActivity : FragmentActivity() {
                 .commitNow()
         }
         videoFragment = frag
+        videoFragment.setOnKeyInterceptListener { view, keyCode, event ->
+            if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP && event.action == android.view.KeyEvent.ACTION_DOWN) {
+                if (videoFragment.isControlsOverlayVisible) {
+                    val focused = view?.findFocus()
+                    if (focused != null) {
+                        val nextFocus = android.view.FocusFinder.getInstance().findNextFocus(view as android.view.ViewGroup, focused, android.view.View.FOCUS_UP)
+                        if (nextFocus == null || nextFocus == focused) {
+                            playerGlue.host?.hideControlsOverlay(true)
+                            return@setOnKeyInterceptListener true
+                        }
+                    }
+                }
+            }
+            false
+        }
 
         initializePlayer()
     }
@@ -111,9 +126,38 @@ class PlayerActivity : FragmentActivity() {
         val playerAdapter = LeanbackPlayerAdapter(this, exoPlayer!!, 250)
         
         // Connect to PlaybackTransportControlGlue
-        playerGlue = PlaybackTransportControlGlue(this, playerAdapter)
+        playerGlue = CustomPlaybackControlGlue(this, playerAdapter)
         playerGlue.host = VideoSupportFragmentGlueHost(videoFragment)
         playerGlue.isSeekEnabled = true
+        playerGlue.isControlsOverlayAutoHideEnabled = true
+        playerGlue.controlListener = object : CustomPlaybackControlListener {
+            override fun onSkipNext() {
+                if (exoPlayer?.hasNextMediaItem() == true) {
+                    exoPlayer?.seekToNextMediaItem()
+                }
+            }
+            override fun onSkipPrevious() {
+                if (exoPlayer?.hasPreviousMediaItem() == true) {
+                    exoPlayer?.seekToPreviousMediaItem()
+                }
+            }
+            override fun onRewind() {
+                exoPlayer?.let { player ->
+                    val newPos = player.currentPosition - 5000L
+                    player.seekTo(if (newPos < 0) 0 else newPos)
+                }
+            }
+            override fun onFastForward() {
+                exoPlayer?.let { player ->
+                    val newPos = player.currentPosition + 15000L
+                    val duration = player.duration
+                    player.seekTo(if (duration > 0 && newPos > duration) duration else newPos)
+                }
+            }
+            override fun onSpeedSettings() {
+                showSpeedSettings()
+            }
+        }
         
         // Set metadata on glue
         playerGlue.title = currentVideo?.title
@@ -315,6 +359,22 @@ class PlayerActivity : FragmentActivity() {
         builder.setCancelable(false)
         resumeDialog = builder.create()
         resumeDialog?.show()
+    }
+
+    private fun showSpeedSettings() {
+        val speeds = arrayOf("0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x")
+        val speedValues = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+        var currentSpeed = exoPlayer?.playbackParameters?.speed ?: 1.0f
+        var checkedItem = speedValues.toList().indexOf(currentSpeed)
+        if (checkedItem == -1) checkedItem = 2
+
+        val builder = android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+        builder.setTitle("Playback Speed")
+        builder.setSingleChoiceItems(speeds, checkedItem) { dialog, which ->
+            exoPlayer?.setPlaybackSpeed(speedValues[which])
+            dialog.dismiss()
+        }
+        builder.show()
     }
 
     private fun sendProgressUpdate(videoId: String, position: Long, duration: Long) {
