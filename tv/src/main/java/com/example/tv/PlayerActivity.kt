@@ -4,34 +4,36 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.KeyEvent
-import android.view.View
-import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
-
+import androidx.media3.ui.leanback.LeanbackPlayerAdapter
+import androidx.leanback.app.VideoSupportFragment
+import androidx.leanback.app.VideoSupportFragmentGlueHost
+import androidx.leanback.media.PlaybackTransportControlGlue
 import org.json.JSONObject
-
-import android.widget.Button
-import android.widget.Toast
+import java.io.IOException
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
 
 class PlayerActivity : FragmentActivity() {
 
-    private lateinit var playerView: PlayerView
     private var exoPlayer: ExoPlayer? = null
-    private lateinit var metaOverlay: View
-    private lateinit var titleText: TextView
-    private lateinit var btnAddQueue: Button
-    private val hideHandler = Handler(Looper.getMainLooper())
     private var videoUrlString: String? = null
     private val progressHandler = Handler(Looper.getMainLooper())
     
     private var playlist: List<TvVideo>? = null
     private var currentIndex: Int = 0
     private var currentVideo: TvVideo? = null
+    private var isWaitingForResume = false
+    private var resumeDialog: android.app.AlertDialog? = null
+
+    private lateinit var videoFragment: VideoSupportFragment
+    private lateinit var playerGlue: PlaybackTransportControlGlue<LeanbackPlayerAdapter>
 
     private val progressRunnable = object : Runnable {
         override fun run() {
@@ -50,18 +52,9 @@ class PlayerActivity : FragmentActivity() {
         }
     }
 
-    private val hideRunnable = Runnable {
-        metaOverlay.visibility = View.GONE
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_player)
-
-        playerView = findViewById(R.id.video_view)
-        metaOverlay = findViewById(R.id.player_meta_overlay)
-        titleText = findViewById(R.id.player_video_title)
-        btnAddQueue = findViewById(R.id.btn_add_queue)
 
         currentVideo = intent.getSerializableExtra("video") as? TvVideo
         playlist = intent.getSerializableExtra("playlist") as? ArrayList<TvVideo>
@@ -72,15 +65,15 @@ class PlayerActivity : FragmentActivity() {
             return
         }
 
-        btnAddQueue.setOnClickListener {
-            currentVideo?.let {
-                addToUpNext(it.id)
-            }
-            btnAddQueue.text = "Added to Queue!"
-            Handler(Looper.getMainLooper()).postDelayed({
-                btnAddQueue.text = "Add to Up Next"
-            }, 2000)
+        // Retrieve or create VideoSupportFragment
+        var frag = supportFragmentManager.findFragmentById(R.id.player_fragment_container) as? VideoSupportFragment
+        if (frag == null) {
+            frag = VideoSupportFragment()
+            supportFragmentManager.beginTransaction()
+                .replace(R.id.player_fragment_container, frag)
+                .commitNow()
         }
+        videoFragment = frag
 
         initializePlayer()
     }
@@ -97,11 +90,11 @@ class PlayerActivity : FragmentActivity() {
         
         val addUrl = "$baseUrl/playlists/quickqueue?videoId=$videoId&name=Up%20Next"
         
-        val client = okhttp3.OkHttpClient()
-        val request = okhttp3.Request.Builder().url(addUrl).build()
-        client.newCall(request).enqueue(object : okhttp3.Callback {
-            override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {}
-            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) { response.close() }
+        val client = OkHttpClient()
+        val request = Request.Builder().url(addUrl).build()
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {}
+            override fun onResponse(call: Call, response: Response) { response.close() }
         })
     }
 
@@ -111,10 +104,20 @@ class PlayerActivity : FragmentActivity() {
 
     private fun initializePlayer() {
         videoUrlString = currentVideo?.url
-        titleText.text = currentVideo?.title
         
         exoPlayer = ExoPlayer.Builder(this).build()
-        playerView.player = exoPlayer
+        
+        // Wrap with Leanback adapter with update period (e.g. 250ms)
+        val playerAdapter = LeanbackPlayerAdapter(this, exoPlayer!!, 250)
+        
+        // Connect to PlaybackTransportControlGlue
+        playerGlue = PlaybackTransportControlGlue(this, playerAdapter)
+        playerGlue.host = VideoSupportFragmentGlueHost(videoFragment)
+        playerGlue.isSeekEnabled = true
+        
+        // Set metadata on glue
+        playerGlue.title = currentVideo?.title
+        playerGlue.subtitle = "Streaming from Mobile Wi-Fi Server"
         
         val items = mutableListOf<MediaItem>()
         if (playlist != null && playlist!!.isNotEmpty()) {
@@ -176,7 +179,6 @@ class PlayerActivity : FragmentActivity() {
                 val state = JSONObject()
                 state.put("videoId", currentVideo?.id ?: "")
                 state.put("title", currentVideo?.title ?: "")
-                // fetch isPlaying safely
                 var playing = false
                 var position = 0L
                 var duration = 0L
@@ -219,17 +221,15 @@ class PlayerActivity : FragmentActivity() {
             exoPlayer?.playWhenReady = true
         }
 
-        scheduleMetadataHide()
-
         exoPlayer?.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 super.onMediaItemTransition(mediaItem, reason)
                 mediaItem?.mediaId?.let { id ->
                     getVideoById(id)?.let { video ->
                         currentVideo = video
-                        titleText.text = video.title
+                        playerGlue.title = video.title
+                        playerGlue.subtitle = "Streaming from Mobile Wi-Fi Server"
                         videoUrlString = video.url
-                        showMetadataTemp()
                         
                         if ((reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || 
                              reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK || 
@@ -268,21 +268,12 @@ class PlayerActivity : FragmentActivity() {
                     }
                 }
             }
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) {
-                    scheduleMetadataHide()
-                }
-            }
         })
 
         progressHandler.removeCallbacks(progressRunnable)
         progressHandler.postDelayed(progressRunnable, 3000)
     }
 
-    private var isWaitingForResume = false
-    private var resumeDialog: android.app.AlertDialog? = null
-
-    // Called from TV Dialog OR from Remote Command
     fun handleResumeChoice(choice: String, position: Long) {
         if (!isWaitingForResume) return
         isWaitingForResume = false
@@ -338,16 +329,16 @@ class PlayerActivity : FragmentActivity() {
         
         val updateUrl = "$baseUrl/update_progress?id=$videoId&position=$position&duration=$duration"
         
-        val client = okhttp3.OkHttpClient()
-        val request = okhttp3.Request.Builder()
+        val client = OkHttpClient()
+        val request = Request.Builder()
             .url(updateUrl)
             .build()
             
-        client.newCall(request).enqueue(object : okhttp3.Callback {
-            override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
                 android.util.Log.e("PlayerActivity", "Failed updating progress: ${e.message}")
             }
-            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+            override fun onResponse(call: Call, response: Response) {
                 response.close()
             }
         })
@@ -366,25 +357,9 @@ class PlayerActivity : FragmentActivity() {
         }
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        showMetadataTemp()
-        return super.onKeyDown(keyCode, event)
-    }
-
-    private fun showMetadataTemp() {
-        metaOverlay.visibility = View.VISIBLE
-        scheduleMetadataHide()
-    }
-
-    private fun scheduleMetadataHide() {
-        hideHandler.removeCallbacks(hideRunnable)
-        hideHandler.postDelayed(hideRunnable, 3500)
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         TvRemoteServer.playerController = null
-        hideHandler.removeCallbacks(hideRunnable)
         progressHandler.removeCallbacks(progressRunnable)
         saveFinalProgress()
         exoPlayer?.release()
