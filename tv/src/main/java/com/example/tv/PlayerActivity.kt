@@ -377,6 +377,43 @@ class PlayerActivity : FragmentActivity() {
         builder.show()
     }
 
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        val prefs = getSharedPreferences("ButtonMappings", android.content.Context.MODE_PRIVATE)
+        val action = prefs.getString(keyCode.toString(), null)
+        
+        if (action != null) {
+            when (action) {
+                "PLAY_PAUSE" -> {
+                    exoPlayer?.let { player ->
+                        if (player.isPlaying) player.pause() else player.play()
+                    }
+                    return true
+                }
+                "SKIP_REVERSE_5" -> {
+                    playerGlue.controlListener?.onRewind()
+                    return true
+                }
+                "SKIP_FORWARD_15" -> {
+                    playerGlue.controlListener?.onFastForward()
+                    return true
+                }
+                "NEXT" -> {
+                    playerGlue.controlListener?.onSkipNext()
+                    return true
+                }
+                "PREVIOUS" -> {
+                    playerGlue.controlListener?.onSkipPrevious()
+                    return true
+                }
+                "SPEED_SETTINGS" -> {
+                    playerGlue.controlListener?.onSpeedSettings()
+                    return true
+                }
+            }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     private fun sendProgressUpdate(videoId: String, position: Long, duration: Long) {
         val videoUrl = videoUrlString
         if (videoUrl.isNullOrEmpty() || !videoUrl.startsWith("http")) return

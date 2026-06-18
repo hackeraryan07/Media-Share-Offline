@@ -38,6 +38,11 @@
             android:theme="@style/Theme.TvApp" />
 
         <activity
+            android:name=".TvSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.TvApp" />
+
+        <activity
             android:name=".PlayerActivity"
             android:exported="false"
             android:theme="@style/Theme.TvApp.Player" />

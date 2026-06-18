@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#1A1A1A"
+    android:padding="32dp"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
+    android:id="@+id/root_layout">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Button Mapping"
+        android:textColor="#FFFFFF"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:id="@+id/tv_instructions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Select 'Listening for Key...', then press a button on remote!"
+        android:textColor="#BBBBBB"
+        android:textSize="18sp"
+        android:layout_marginBottom="32dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <Button
+            android:id="@+id/btn_listen_key"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Click to Listen for Key"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/tv_last_key"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Key: None"
+            android:textColor="#FFDD00"
+            android:textSize="20sp"
+            android:layout_marginStart="16dp"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/spinner_actions"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="32dp"
+            android:backgroundTint="#FFFFFF" />
+
+        <Button
+            android:id="@+id/btn_save_mapping"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Save Mapping"
+            android:layout_marginStart="16dp" />
+            
+        <Button
+            android:id="@+id/btn_clear_mappings"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Clear All"
+            android:backgroundTint="#AA0000"
+            android:layout_marginStart="16dp" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Saved Mappings:"
+        android:textColor="#FFFFFF"
+        android:textSize="22sp"
+        android:layout_marginTop="32dp"
+        android:layout_marginBottom="16dp" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_mappings"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+</LinearLayout>

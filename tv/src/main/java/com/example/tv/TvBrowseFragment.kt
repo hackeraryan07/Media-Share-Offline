@@ -296,6 +296,12 @@ class TvBrowseFragment : BrowseSupportFragment() {
                     rowsAdapter.add(ListRow(header, rowAdapter))
                 }
             }
+            
+            val settingsHeader = HeaderItem(1000L, "App Settings")
+            val settingsAdapter = ArrayObjectAdapter(cardPresenter)
+            settingsAdapter.add(TvVideo("action_settings", "Button Mapping", "Configure custom remote buttons", "", false, "Settings"))
+            rowsAdapter.add(ListRow(settingsHeader, settingsAdapter))
+            
         } else {
             if (localVideos.isNotEmpty()) {
                 var rowIndex = 0
@@ -308,6 +314,8 @@ class TvBrowseFragment : BrowseSupportFragment() {
                     val folderRowAdapter = folderRow.adapter as ArrayObjectAdapter
                     folderRowAdapter.setItems(folderVideos, videoDiffCallback)
                 }
+                
+                // Assuming settings is the last row, or we don't need to rebuild it
             }
         }
     }
@@ -315,6 +323,10 @@ class TvBrowseFragment : BrowseSupportFragment() {
     private fun setupEventListeners() {
         onItemViewClickedListener = OnItemViewClickedListener { _, item, _, row ->
             if (item is TvVideo) {
+                if (item.id == "action_settings") {
+                    startActivity(Intent(requireContext(), TvSettingsActivity::class.java))
+                    return@OnItemViewClickedListener
+                }
                 if (item.id != "err" && item.url.isNotEmpty()) {
                     val intent = Intent(requireContext(), PlayerActivity::class.java).apply {
                         putExtra("video", item)
