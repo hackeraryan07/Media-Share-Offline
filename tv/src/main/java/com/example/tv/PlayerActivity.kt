@@ -74,26 +74,6 @@ class PlayerActivity : FragmentActivity() {
                 .commitNow()
         }
         videoFragment = frag
-        videoFragment.setOnKeyInterceptListener { view, keyCode, event ->
-            if (videoFragment.isControlsOverlayVisible && event.action == android.view.KeyEvent.ACTION_DOWN) {
-                videoFragment.tickle()
-                if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
-                    val focused = view?.findFocus()
-                    if (focused != null) {
-                        val nextFocus = android.view.FocusFinder.getInstance().findNextFocus(view as android.view.ViewGroup, focused, android.view.View.FOCUS_UP)
-                        val controlsDock = view.findViewById<android.view.View>(androidx.leanback.R.id.playback_controls_dock)
-                        if (nextFocus == null || nextFocus == focused) {
-                            playerGlue.host?.hideControlsOverlay(true)
-                            return@setOnKeyInterceptListener true
-                        } else if (controlsDock != null && !isDescendant(controlsDock, nextFocus)) {
-                            playerGlue.host?.hideControlsOverlay(true)
-                            return@setOnKeyInterceptListener true
-                        }
-                    }
-                }
-            }
-            false
-        }
 
         initializePlayer()
     }
@@ -274,7 +254,6 @@ class PlayerActivity : FragmentActivity() {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) {
                     playerGlue.host?.setControlsOverlayAutoHideEnabled(true)
-                    videoFragment.tickle()
                 }
             }
 
@@ -464,15 +443,6 @@ class PlayerActivity : FragmentActivity() {
                 }
             }
         }
-    }
-
-    private fun isDescendant(parent: android.view.View, child: android.view.View): Boolean {
-        var current = child.parent
-        while (current != null) {
-            if (current === parent) return true
-            current = current.parent
-        }
-        return false
     }
 
     override fun onDestroy() {

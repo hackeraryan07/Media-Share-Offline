@@ -53,6 +53,20 @@ class CustomPlaybackControlGlue<T : PlayerAdapter>(
         adapter.add(speedAction)
     }
 
+    override fun onKey(v: android.view.View?, keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (event?.action == android.view.KeyEvent.ACTION_DOWN && keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
+            val focused = v?.findFocus()
+            if (focused != null && v is android.view.ViewGroup) {
+                val nextFocus = android.view.FocusFinder.getInstance().findNextFocus(v, focused, android.view.View.FOCUS_UP)
+                if (nextFocus == null || nextFocus == focused) {
+                    host?.hideControlsOverlay(true)
+                    return true
+                }
+            }
+        }
+        return super.onKey(v, keyCode, event)
+    }
+
     override fun onActionClicked(action: Action?) {
         when (action) {
             skipPreviousAction -> controlListener?.onSkipPrevious()
