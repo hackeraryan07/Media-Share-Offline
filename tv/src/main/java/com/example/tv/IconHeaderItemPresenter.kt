@@ -34,9 +34,10 @@ class IconHeaderItemPresenter : RowHeaderPresenter() {
         }
         layout.addView(icon)
         layout.addView(text)
-        // required to ensure row selection highlighting works correctly
-        layout.isFocusable = false
+        
+        layout.isFocusable = true
         layout.isFocusableInTouchMode = false
+        
         return RowHeaderPresenter.ViewHolder(layout)
     }
 
