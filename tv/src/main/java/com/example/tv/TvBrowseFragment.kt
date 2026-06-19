@@ -68,7 +68,6 @@ class TvBrowseFragment : BrowseSupportFragment() {
 
     private fun loadRows() {
         val listRowPresenter = ListRowPresenter()
-        listRowPresenter.headerPresenter = IconHeaderItemPresenter()
         rowsAdapter = ArrayObjectAdapter(listRowPresenter)
         adapter = rowsAdapter
         
